@@ -105,6 +105,10 @@ static bool therm_reset_enabled;
 static bool online_core;
 static bool cluster_info_probed;
 static bool cluster_info_nodes_called;
+//[BUGFIX]added By miao, bug 902619
+#if defined(CONFIG_TCT_8X16_IDOL3)
+static bool boot_fmax_limit_enabled;
+#endif
 static int *tsens_id_map;
 static DEFINE_MUTEX(vdd_rstr_mutex);
 static DEFINE_MUTEX(psm_mutex);
@@ -153,6 +157,10 @@ struct cluster_info {
 	bool sync_cluster;
 	uint32_t limited_max_freq;
 	uint32_t limited_min_freq;
+//[BUGFIX]added By miao, bug 902619
+#if defined(CONFIG_TCT_8X16_IDOL3)
+	uint32_t boot_max_freq_limit;
+#endif
 };
 
 struct cpu_info {
@@ -273,7 +281,10 @@ enum ocr_request {
 	OPTIMUM_CURRENT_MAX,
 	OPTIMUM_CURRENT_NR,
 };
-
+//[BUGFIX]added By miao, bug 902619
+#ifdef CONFIG_TCT_8X16_IDOL3
+#define __ATTR_RW(attr) __ATTR(attr, 0644, attr##_show, attr##_store)
+#endif
 #define SYNC_CORE(_cpu) \
 	(core_ptr && cpus[_cpu].parent_ptr->sync_cluster)
 
@@ -336,7 +347,98 @@ enum ocr_request {
 	ko_attr.store = store_mx_##_name; \
 	sysfs_attr_init(&ko_attr.attr); \
 	_attr_gp.attrs[0] = &ko_attr.attr;
+//[BUGFIX]added By miao, bug 902619
+#if defined(CONFIG_TCT_8X16_IDOL3)
+static unsigned int big_freq_limit, small_freq_limit;
 
+static int __init big_freq(char *str)
+{
+	get_option(&str, &big_freq_limit);
+	return 0;
+}
+early_param("big_freq", big_freq);
+
+static int __init small_freq(char *str)
+{
+	get_option(&str, &small_freq_limit);
+	return 0;
+}
+early_param("small_freq", small_freq);
+
+static int probe_boot_freq_limit(struct device *dev)
+{
+	int i, j;
+	uint32_t val = 0;
+	int cluster_cnt = 0, ret = 0;
+	char *key = "qcom,cluster-boot-freq-limit";
+	bool match_found = false;
+	struct cluster_info *cluster_ptr = NULL;
+
+	if (!of_get_property(dev->of_node, key, &cluster_cnt)
+		|| cluster_cnt <= 0 || !core_ptr)
+		return -EINVAL;
+
+	if (cluster_cnt % (sizeof(__be32) * 2)) {
+		pr_err("Invalid number(%d) of entry for %s\n",
+				cluster_cnt, key);
+		return -EINVAL;
+	}
+	cluster_cnt /= (sizeof(__be32) * 2);
+	if (cluster_cnt > core_ptr->entity_count) {
+		pr_err("Invalid cluster count:%d\n", cluster_cnt);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < cluster_cnt; i++) {
+		ret = of_property_read_u32_index(dev->of_node, key,
+							i * 2, &val);
+		if (ret) {
+			pr_err("Error reading index%d\n", i * 2);
+			return -EINVAL;
+		}
+		for (j = 0; j < core_ptr->entity_count; j++) {
+			cluster_ptr = &core_ptr->child_entity_ptr[j];
+			if (cluster_ptr->cluster_id != val)
+				continue;
+
+			if (!cluster_ptr->sync_cluster) {
+				pr_err("Cluster%d is not synchronous\n", val);
+				break;
+			}
+			ret = of_property_read_u32_index(dev->of_node,
+							key, i * 2 + 1, &val);
+			if (ret) {
+				pr_err("Error reading index%d\n", i * 2 + 1);
+				return -EINVAL;
+			}
+			cluster_ptr->boot_max_freq_limit = val;
+			if (cluster_ptr->cluster_id)
+				cluster_ptr->boot_max_freq_limit = big_freq_limit ?
+				big_freq_limit : cluster_ptr->boot_max_freq_limit;
+			else
+				cluster_ptr->boot_max_freq_limit =
+					small_freq_limit ? small_freq_limit :
+					cluster_ptr->boot_max_freq_limit;
+			pr_err("Boot freq limit for cluster[%d] is %d\n",
+				cluster_ptr->cluster_id, cluster_ptr->boot_max_freq_limit);
+			match_found = true;
+			/* Setting initial limiting_max_freq  equal to
+			   boot_max_freq_limit to limit to boot freq frequency
+			   even if there is no trigger from thermal during boot
+			*/
+			cluster_ptr->limited_max_freq =
+				min(cluster_ptr->limited_max_freq,
+					cluster_ptr->boot_max_freq_limit);
+			break;
+		}
+	}
+	if (match_found)
+		boot_fmax_limit_enabled = true;
+
+	return 0;
+}
+#endif
+//[BUGFIX]Added END
 static int  msm_thermal_cpufreq_callback(struct notifier_block *nfb,
 		unsigned long event, void *data)
 {
@@ -635,6 +737,10 @@ static void update_cpu_topology(struct device *dev)
 		temp_ptr[i].cluster_cores = cluster_cpus[i];
 		temp_ptr[i].limited_max_freq = UINT_MAX;
 		temp_ptr[i].limited_min_freq = 0;
+//[BUGFIX]added By miao, bug 902619
+#if defined(CONFIG_TCT_8X16_IDOL3)
+		temp_ptr[i].boot_max_freq_limit = UINT_MAX;
+#endif
 		temp_ptr[i].freq_idx = 0;
 		temp_ptr[i].freq_idx_low = 0;
 		temp_ptr[i].freq_idx_high = 0;
@@ -767,6 +873,10 @@ static void update_cluster_freq(void)
 			max = min(max, cpus[_cpu].limited_max_freq);
 			min = max(min, cpus[_cpu].limited_min_freq);
 		}
+//[BUGFIX]added By miao, bug 902619
+#if defined(CONFIG_TCT_8X16_IDOL3)
+		max = min(max, cluster_ptr->boot_max_freq_limit);
+#endif
 		if (cluster_ptr->limited_max_freq == max
 			&& cluster_ptr->limited_min_freq == min)
 			continue;
@@ -3899,7 +4009,80 @@ psm_reg_exit:
 
 	return ret;
 }
+//[BUGFIX]added By miao, bug 902619
+#if defined(CONFIG_TCT_8X16_IDOL3)
+static ssize_t boot_freq_limit_enable_store(struct kobject *kobj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int ret = 0, i;
+	uint32_t val = 0;
+	struct cluster_info *cluster_ptr;
 
+	ret = kstrtouint(buf, 10, &val);
+	if (ret) {
+		pr_err("Invalid input:%s. ret:%d", buf, ret);
+		goto done_store;
+	}
+
+	pr_debug("Request to %s boot freq limit\n", val ? "enable": "disable");
+
+	if (boot_fmax_limit_enabled == (val ? true : false))
+		goto done_store;
+
+	boot_fmax_limit_enabled = val ? true : false;
+
+	if (!boot_fmax_limit_enabled) {
+		if (core_ptr) {
+			for (i = 0; i < core_ptr->entity_count; i++) {
+				cluster_ptr = &core_ptr->child_entity_ptr[i];
+				cluster_ptr->boot_max_freq_limit = UINT_MAX;
+			}
+			pr_info("Disabling boot freq limit\n");
+			if (freq_mitigation_task) {
+				complete(&freq_mitigation_complete);
+			} else {
+				get_online_cpus();
+				update_cluster_freq();
+				put_online_cpus();
+			}
+		}
+	}
+done_store:
+	return count;
+}
+
+static ssize_t boot_freq_limit_enable_show(
+	struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n",
+				boot_fmax_limit_enabled ? 1: 0);
+}
+
+static struct kobj_attribute boot_freq_limit_attr =
+		__ATTR_RW(boot_freq_limit_enable);
+static int boot_freq_limit_sysfs_node(void)
+{
+    struct kobject *module_kobj = NULL;
+    int ret = 0;
+    if (!boot_fmax_limit_enabled)
+        return ret;
+
+    module_kobj = kset_find_obj(module_kset, KBUILD_MODNAME);
+    if (!module_kobj) {
+            pr_err("cannot find kobject\n");
+            return -ENOENT;
+    }
+    sysfs_attr_init(&boot_freq_limit_attr.attr);
+    ret = sysfs_create_file(module_kobj, &boot_freq_limit_attr.attr);
+    if (ret) {
+        pr_err(
+            "cannot create boot_freq_limit kobject attribute. err:%d\n", ret);
+        return ret;
+    }
+    return ret;
+}
+#endif
+//[BUGFIX]added END
 static struct kobj_attribute sensor_info_attr =
 		__ATTR_RO(sensor_info);
 static int msm_thermal_add_sensor_info_nodes(void)
@@ -4973,6 +5156,10 @@ static int msm_thermal_dev_probe(struct platform_device *pdev)
 	ret = probe_ocr(node, &data, pdev);
 
 	update_cpu_topology(&pdev->dev);
+//[BUGFIX]added By miao, bug 902619
+#if defined(CONFIG_TCT_8X16_IDOL3)
+	probe_boot_freq_limit(&pdev->dev);
+#endif
 
 	/*
 	 * In case sysfs add nodes get called before probe function.
@@ -5085,6 +5272,10 @@ int __init msm_thermal_late_init(void)
 	msm_thermal_add_mx_nodes();
 	interrupt_mode_init();
 	create_cpu_topology_sysfs();
+//[BUGFIX]added By miao, bug 902619
+#if defined(CONFIG_TCT_8X16_IDOL3)
+	boot_freq_limit_sysfs_node();
+#endif
 	return 0;
 }
 late_initcall(msm_thermal_late_init);

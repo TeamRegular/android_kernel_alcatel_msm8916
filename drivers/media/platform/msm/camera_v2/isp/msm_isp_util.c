@@ -26,6 +26,9 @@ static struct msm_isp_bandwidth_mgr isp_bandwidth_mgr;
 
 static uint64_t msm_isp_cpp_clk_rate;
 
+
+#define MSM_MIN_REQ_VFE_CPP_BW 1700000000
+
 #define VFE40_8974V2_VERSION 0x1001001A
 static struct msm_bus_vectors msm_isp_init_vectors[] = {
 	{
@@ -182,6 +185,12 @@ int msm_isp_update_bandwidth(enum msm_isp_hw_client client,
 				isp_bandwidth_mgr.client_info[i].ib;
 		}
 	}
+	/*All the clients combined i.e. VFE + CPP should use atleast
+	minimum recommended bandwidth*/
+	/*Begin @zhfan PR 982440 Increase ib value to avoid ISP overflow*/
+	if (path->vectors[0].ib < 6400000000)
+		path->vectors[0].ib = 6400000000;
+	/*End @zhfan PR 982440 Increase ib value to avoid ISP overflow*/
 	msm_bus_scale_client_update_request(isp_bandwidth_mgr.bus_client,
 		isp_bandwidth_mgr.bus_vector_active_idx);
 	/* Insert into circular buffer */
@@ -1730,7 +1739,7 @@ end:
 int msm_isp_open_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
 	struct vfe_device *vfe_dev = v4l2_get_subdevdata(sd);
-	long rc = 0;
+	long rc;
 	ISP_DBG("%s\n", __func__);
 
 	mutex_lock(&vfe_dev->realtime_mutex);
@@ -1810,7 +1819,7 @@ void msm_isp_end_avtimer(void)
 
 int msm_isp_close_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
-	long rc = 0;
+	long rc;
 	struct vfe_device *vfe_dev = v4l2_get_subdevdata(sd);
 	ISP_DBG("%s E\n", __func__);
 	mutex_lock(&vfe_dev->realtime_mutex);

@@ -342,7 +342,7 @@ config BOOTPARAM_HUNG_TASK_PANIC_VALUE
 config SCHED_DEBUG
 	bool "Collect scheduler debugging info"
 	depends on DEBUG_KERNEL && PROC_FS
-	default y
+	default n
 	help
 	  If you say Y here, the /proc/sched_debug file will be provided
 	  that can help debug the scheduler. The runtime overhead of this
@@ -351,7 +351,7 @@ config SCHED_DEBUG
 config SYSRQ_SCHED_DEBUG
 	bool "Print scheduling debugging info from sysrq-trigger"
 	depends on SCHED_DEBUG
-	default y
+	default n
 	help
 	  If you say Y here, the "show-task-states(T)" and
 	  "show-blocked-tasks(W)" sysrq-triggers will print additional

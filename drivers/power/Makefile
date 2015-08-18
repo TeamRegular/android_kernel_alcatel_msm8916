@@ -54,7 +54,13 @@ obj-$(CONFIG_POWER_AVS)		+= avs/
 obj-$(CONFIG_SMB349_USB_CHARGER)   += smb349-charger.o
 obj-$(CONFIG_SMB350_CHARGER)   += smb350_charger.o
 obj-$(CONFIG_SMB135X_CHARGER)   += smb135x-charger.o
-obj-$(CONFIG_SMB1360_CHARGER_FG) += smb1360-charger-fg.o
+#JRD BSP START by eric.gong@tcl.com "[idol3-4.7][charger] porting smb1360."
+ifdef CONFIG_TCT_8X16_IDOL347
+	obj-$(CONFIG_SMB1360_CHARGER) += idol347/
+else
+	obj-$(CONFIG_SMB1360_CHARGER_FG) += smb1360-charger-fg.o
+endif
+#JRD BSP END by eric.gong@tcl.com "[idol3-4.7][charger] porting smb1360."
 obj-$(CONFIG_SMB358_CHARGER)	+= smb358-charger.o
 obj-$(CONFIG_BATTERY_BQ28400)	+= bq28400_battery.o
 obj-$(CONFIG_SMB137C_CHARGER)	+= smb137c-charger.o
@@ -66,6 +72,7 @@ obj-$(CONFIG_QPNP_LINEAR_CHARGER)	+= qpnp-linear-charger.o
 obj-$(CONFIG_QPNP_SMBCHARGER)	+= qpnp-smbcharger.o
 obj-$(CONFIG_CHARGER_SMB347)	+= smb347-charger.o
 obj-$(CONFIG_CHARGER_TPS65090)	+= tps65090-charger.o
+obj-$(CONFIG_CHARGER_FAN54015)	+= fan54015_charger.o qpnp_pmic_ctrl.o
 obj-$(CONFIG_BATTERY_BCL)	+= battery_current_limit.o
 obj-$(CONFIG_MSM_BCL_CTL)	+= msm_bcl.o
 obj-$(CONFIG_MSM_BCL_PERIPHERAL_CTL) += bcl_peripheral.o

@@ -1197,6 +1197,11 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 	struct mdss_overlay_private *mdp5_data = mfd_to_mdp5_data(mfd);
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
 	struct mdss_mdp_ctl *ctl = mdp5_data->ctl;
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, PR-789023, 2014/11/20*/
+#ifdef CONFIG_TCT_8X16_IDOL3
+	pr_debug("starting fb%d overlay called from %pS\n", mfd->index,
+		__builtin_return_address(0));
+#endif
 
 	pr_debug("starting fb%d overlay called from %pS\n", mfd->index,
 		__builtin_return_address(0));
@@ -1204,6 +1209,10 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 	if (mdss_mdp_ctl_is_power_on(ctl)) {
 		if (!mdp5_data->mdata->batfet)
 			mdss_mdp_batfet_ctrl(mdp5_data->mdata, true);
+#ifndef CONFIG_TCT_8X16_IDOL3
+		mdss_mdp_release_splash_pipe(mfd);
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY*/
 		return 0;
 	} else if (mfd->panel_info->cont_splash_enabled) {
 		mutex_lock(&mdp5_data->list_lock);
@@ -1444,18 +1453,34 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 	ret = mdss_mdp_overlay_start(mfd);
 	if (ret) {
 		pr_err("unable to start overlay %d (%d)\n", mfd->index, ret);
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, PR-789023, 2014/11/20*/
+#ifndef CONFIG_TCT_8X16_IDOL3
+		mutex_unlock(&mdp5_data->ov_lock);
+		if (ctl->shared_lock)
+			mutex_unlock(ctl->shared_lock);
+		return ret;
+#else
 		goto unlock_exit;
 	}
 
 	if (!mdss_mdp_ctl_is_power_on(ctl)) {
 		pr_debug("ctl is not powerd on. skip kickoff\n");
 		goto unlock_exit;
+#endif
 	}
 
 	ret = mdss_iommu_ctrl(1);
 	if (IS_ERR_VALUE(ret)) {
 		pr_err("iommu attach failed rc=%d\n", ret);
+#ifndef CONFIG_TCT_8X16_IDOL3
+		mutex_unlock(&mdp5_data->ov_lock);
+		if (ctl->shared_lock)
+			mutex_unlock(ctl->shared_lock);
+		return ret;
+#else
 		goto unlock_exit;
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY*/
 	}
 	mutex_lock(&mdp5_data->list_lock);
 
@@ -1575,11 +1600,18 @@ commit_fail:
 	if (!mdp5_data->kickoff_released)
 		mdss_mdp_ctl_notify(ctl, MDP_NOTIFY_FRAME_CTX_DONE);
 
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, PR-789023, 2014/11/20*/
+#ifdef CONFIG_TCT_8X16_IDOL3
 	mdss_iommu_ctrl(0);
 unlock_exit:
+#endif
 	mutex_unlock(&mdp5_data->ov_lock);
 	if (ctl->shared_lock)
 		mutex_unlock(ctl->shared_lock);
+#ifndef CONFIG_TCT_8X16_IDOL3
+	mdss_iommu_ctrl(0);
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY*/
 	ATRACE_END(__func__);
 
 	return ret;
@@ -1808,6 +1840,11 @@ static int mdss_mdp_overlay_play(struct msm_fb_data_type *mfd,
 		ret = -EPERM;
 		goto done;
 	}
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, PR-789023, 2014/11/20*/
+#ifdef CONFIG_TCT_8X16_IDOL3
+	mdss_mdp_release_splash_pipe(mfd);
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY*/
 
 	mdss_mdp_release_splash_pipe(mfd);
 
@@ -1961,31 +1998,31 @@ static void mdss_mdp_overlay_pan_display(struct msm_fb_data_type *mfd)
 		       offset, fbi->fix.smem_len);
 		goto pan_display_error;
 	}
-
-	ret = mdss_mdp_overlay_start(mfd);
+//[BUGFIX]added By Miao, bug 921886, patch from qualcomm, case 01908960
+    ret = mdss_mdp_overlay_get_fb_pipe(mfd, &pipe,
+                                     MDSS_MDP_MIXER_MUX_LEFT);
 	if (ret) {
-		pr_err("unable to start overlay %d (%d)\n", mfd->index, ret);
+        pr_err("unable to allocate base pipe\n");
 		goto pan_display_error;
 	}
 
-	ret = mdss_iommu_ctrl(1);
-	if (IS_ERR_VALUE(ret)) {
-		pr_err("IOMMU attach failed\n");
+     if (mdss_mdp_pipe_map(pipe)) {
+        pr_err("unable to map base pipe\n");
 		goto pan_display_error;
 	}
-
-	ret = mdss_mdp_overlay_get_fb_pipe(mfd, &pipe,
-					MDSS_MDP_MIXER_MUX_LEFT);
+    ret = mdss_mdp_overlay_start(mfd);
 	if (ret) {
-		pr_err("unable to allocate base pipe\n");
+
+        pr_err("unable to start overlay %d (%d)\n", mfd->index, ret);
 		goto pan_display_error;
 	}
 
-	if (mdss_mdp_pipe_map(pipe)) {
-		pr_err("unable to map base pipe\n");
+    ret = mdss_iommu_ctrl(1);
+    if (IS_ERR_VALUE(ret)) {
+        pr_err("IOMMU attach failed\n");
 		goto pan_display_error;
 	}
-
+//[BUGFIX]added END
 	buf = &pipe->back_buf;
 	if (mdata->mdss_util->iommu_attached()) {
 		if (!mfd->iova) {

@@ -26,7 +26,7 @@
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
 #define VFE40_BURST_LEN 1
-#define VFE40_BURST_LEN_8916_VERSION 2
+#define VFE40_BURST_LEN_8916_VERSION 3
 #define VFE40_STATS_BURST_LEN 1
 #define VFE40_STATS_BURST_LEN_8916_VERSION 2
 #define VFE40_UB_SIZE 1536 /* 1536 * 128 bits = 24KB */
@@ -393,7 +393,14 @@ static void msm_vfe40_init_hardware_reg(struct vfe_device *vfe_dev)
 	msm_vfe40_init_qos_parms(vfe_dev, &qos_parms, &ds_parms);
 	msm_vfe40_init_vbif_parms(vfe_dev, &vbif_parms);
 	/* BUS_CFG */
-	msm_camera_io_w(0x10000001, vfe_dev->vfe_base + 0x50);
+    /* Changing the bus config MAL length to 1024 bits */
+    msm_camera_io_w(0x90000009, vfe_dev->vfe_base + 0x50);
+    /* Enabling MAL for each WM*/
+    msm_camera_io_w(0x00000001, vfe_dev->vfe_base + 0x78);
+    msm_camera_io_w(0x00000001, vfe_dev->vfe_base + 0x9C);
+    msm_camera_io_w(0x00000001, vfe_dev->vfe_base + 0xC0);
+    msm_camera_io_w(0x00000001, vfe_dev->vfe_base + 0xE4);
+
 	msm_camera_io_w(0xE00000F1, vfe_dev->vfe_base + 0x28);
 	msm_camera_io_w_mb(0xFEFFFFFF, vfe_dev->vfe_base + 0x2C);
 	msm_camera_io_w(0xFFFFFFFF, vfe_dev->vfe_base + 0x30);
@@ -418,8 +425,10 @@ static void msm_vfe40_clear_status_reg(struct vfe_device *vfe_dev)
 static void msm_vfe40_process_reset_irq(struct vfe_device *vfe_dev,
 	uint32_t irq_status0, uint32_t irq_status1)
 {
-	if (irq_status0 & (1 << 31))
+	if (irq_status0 & (1 << 31)){
 		complete(&vfe_dev->reset_complete);
+		vfe_dev->reset_pending = 0;
+	}
 }
 
 static void msm_vfe40_process_halt_irq(struct vfe_device *vfe_dev,
@@ -698,6 +707,9 @@ static long msm_vfe40_reset_hardware(struct vfe_device *vfe_dev,
 {
 	long rc = 0;
 	init_completion(&vfe_dev->reset_complete);
+	if (blocking_call)
+		vfe_dev->reset_pending = 1;
+	
 
 	if (first_start) {
 		msm_camera_io_w_mb(0x1FF, vfe_dev->vfe_base + 0xC);
@@ -714,6 +726,11 @@ static long msm_vfe40_reset_hardware(struct vfe_device *vfe_dev,
 	if (blocking_call) {
 		rc = wait_for_completion_timeout(
 			&vfe_dev->reset_complete, msecs_to_jiffies(50));
+		if (rc <= 0) {
+			pr_err("%s:%d failed: reset timeout\n", __func__,
+				__LINE__);
+			vfe_dev->reset_pending = 0;
+		}
 	}
 	return rc;
 }

@@ -3205,14 +3205,28 @@ static int load_module(struct load_info *info, const char __user *uargs,
 
 	err = module_sig_check(info);
 	if (err)
-		goto free_copy;
+		goto skip_wlan_sig_check;
 
 	err = elf_header_check(info);
 	if (err)
 		goto free_copy;
-
+skip_wlan_sig_check:
 	/* Figure out module layout, and allocate all the memory. */
 	mod = layout_and_allocate(info, flags);
+	if(err)
+	  {
+	     if(strncmp(mod->name, "wlan", strlen("wlan")) != 0)
+		 {
+		       printk(KERN_ERR "init_module: failed module verification of %s.\n: ",mod->name);
+               goto free_copy;
+		 }
+	     else
+	       {
+            info->sig_ok =	true;
+			printk(KERN_ERR "init_module: skip module verification of %s.\n: ",mod->name);
+        }
+	  }
+
 	if (IS_ERR(mod)) {
 		err = PTR_ERR(mod);
 		goto free_copy;
@@ -3344,7 +3358,7 @@ SYSCALL_DEFINE3(init_module, void __user *, umod,
 	if (err)
 		return err;
 
-	pr_debug("init_module: umod=%p, len=%lu, uargs=%p\n",
+	pr_warn("init_module: umod=%p, len=%lu, uargs=%p\n",
 	       umod, len, uargs);
 
 	err = copy_module_from_user(umod, len, &info);

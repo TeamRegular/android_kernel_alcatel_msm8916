@@ -373,6 +373,23 @@ config INPUT_KXTJ9_POLLED_MODE
 	help
 	  Say Y here if you need accelerometer to work in polling mode.
 
+config SENSORS_HALL
+       tristate "Hall sensor"
+       depends on I2C
+       help
+         Say Y here to enable support for the Hall sensor
+
+         To compile this driver as a module, choose M here: the module will
+         be called hall_sensor.
+
+config SENSORS_PSENSOR
+	tristate "P-sensor"
+	help
+	  Say Y here to enable support for the P-sensor
+
+	  To compile this driver as a module, choose M here: the module will
+	  be called P-sensor.
+
 config INPUT_POWERMATE
 	tristate "Griffin PowerMate and Contour Jog support"
 	depends on USB_ARCH_HAS_HCD
@@ -777,6 +794,16 @@ config SENSORS_STK3X1X
 	  To compile this driver as a module, choose M here: the
 	  module will be called stk3x1x.
 
+#yongzhong.cheng,2014/07/24,PR 724584: add proximity and light sensor config begin
+config SENSORS_TSL2772
+	tristate "TAOS TSL2772 proximity and ambient light sensor"
+	depends on I2C
+	help
+	 If you say yes here you get support for the TAOS tsl2772,
+	 proximity and ambient light sensors.
+	 This driver can also be built as a module.  If so, the module
+	 will be called tsl277x.
+#yongzhong.cheng,2014/07/24,PR 724584: add proximity and light sensor config end
 config SENSORS_CAPELLA_CM36283
 	tristate "CM36283 proximity and light sensor"
 	depends on I2C
@@ -832,3 +859,12 @@ config SENSORS_BMI058
 
 endif
 
+config GYRO_BMG160 #[BUFFIX]-Add- by TCTNB.XQJ, PR-797187,789423, 797185,2014/11/14,finish sensors drirver
+	tristate "BMG160 Triaxial gyroscope sensor"
+	depends on I2C
+	help
+	  Say Y here if you want to support Bosch BMG1160
+	  connected via an I2C bus.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called mpu3050.

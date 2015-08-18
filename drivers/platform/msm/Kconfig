@@ -242,4 +242,13 @@ config QMP_CORE
 	help
 		This option enables Qualcomm Malware Protection Sphinx component
 		to log on-device software API activity.
+config TCTNB_LONGPRESS_DISABLE #[BUGFIX]-ADD by TCTNB.XQJ,12/25/2014,PR-883657.for disable hard reset ,hardware test
+tristate "disable long preess power key"
+	help
+		This option disable hard reset by long pressing power key.
+
+config IDOL347_PKYLONGPRESS_DISABLE
+	tristate "disable long preess power key"
+	help
+		This option disable hard reset by long pressing power key.
 endmenu

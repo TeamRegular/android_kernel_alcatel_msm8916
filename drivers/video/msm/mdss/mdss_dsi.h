@@ -97,6 +97,7 @@ enum dsi_panel_status_mode {
 	ESD_BTA,
 	ESD_REG,
 	ESD_REG_NT35596,
+        ESD_REG_HX8394D,
 	ESD_TE,
 	ESD_MAX,
 };
@@ -186,6 +187,10 @@ enum dsi_pm_type {
 #define DSI_DYNAMIC_REFRESH_PIPE_DELAY		0x204
 #define DSI_DYNAMIC_REFRESH_PIPE_DELAY2		0x208
 #define DSI_DYNAMIC_REFRESH_PLL_DELAY		0x20C
+
+//#ifdef CONFIG_TCT_8X16_IDOL347
+//#define  HX8394D_ESD_IDOL347
+//#endif
 
 extern struct device dsi_dev;
 extern u32 dsi_irq;
@@ -284,6 +289,9 @@ enum {
 #define DSI_EV_MDP_FIFO_UNDERFLOW	0x0002
 #define DSI_EV_DSI_FIFO_EMPTY		0x0004
 #define DSI_EV_DLNx_FIFO_OVERFLOW	0x0008
+#ifdef CONFIG_TCT_8X16_IDOL347
+#define DSI_EV_LP_RX_TIMEOUT		0x0010
+#endif
 #define DSI_EV_MDP_BUSY_RELEASE		0x80000000
 
 struct mdss_dsi_ctrl_pdata {
@@ -294,6 +302,9 @@ struct mdss_dsi_ctrl_pdata {
 	int (*set_col_page_addr) (struct mdss_panel_data *pdata);
 	int (*check_status) (struct mdss_dsi_ctrl_pdata *pdata);
 	int (*check_read_status) (struct mdss_dsi_ctrl_pdata *pdata);
+	#ifdef CONFIG_TCT_8X16_IDOL347 
+	int (*check_read_status_for_one) (struct mdss_dsi_ctrl_pdata *pdata);
+	#endif
 	int (*cmdlist_commit)(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp);
 	void (*switch_mode) (struct mdss_panel_data *pdata, int mode);
 	struct mdss_panel_data panel_data;
@@ -355,9 +366,16 @@ struct mdss_dsi_ctrl_pdata {
 	struct dsi_panel_cmds on_cmds;
 	struct dsi_panel_cmds off_cmds;
 	struct dsi_panel_cmds status_cmds;
+
 	u32 status_cmds_rlen;
 	u32 status_value;
 	u32 status_error_count;
+	
+	#ifdef CONFIG_TCT_8X16_IDOL347 
+	struct dsi_panel_cmds status_cmds_for_one;
+	u32 status_cmds_rlen_for_one;
+	u32 status_value_for_one;
+	#endif
 
 	struct dsi_panel_cmds video2cmd;
 	struct dsi_panel_cmds cmd2video;
@@ -462,7 +480,11 @@ void mdss_dsi_en_wait4dynamic_done(struct mdss_dsi_ctrl_pdata *ctrl);
 int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp);
 void mdss_dsi_cmdlist_kickoff(int intf);
 int mdss_dsi_bta_status_check(struct mdss_dsi_ctrl_pdata *ctrl);
+#ifdef CONFIG_TCT_8X16_IDOL347
+int mdss_dsi_hx8394d_reg_status_check(struct mdss_dsi_ctrl_pdata *ctrl);
+#else
 int mdss_dsi_reg_status_check(struct mdss_dsi_ctrl_pdata *ctrl);
+#endif
 bool __mdss_dsi_clk_enabled(struct mdss_dsi_ctrl_pdata *ctrl, u8 clk_type);
 void mdss_dsi_ctrl_setup(struct mdss_dsi_ctrl_pdata *ctrl);
 void mdss_dsi_dln0_phy_err(struct mdss_dsi_ctrl_pdata *ctrl);

@@ -219,7 +219,13 @@ targets += dtbs
 targets += $(DTB_LIST)
 
 #used for cleaning - not building
+ifneq ($(CONFIG_TCT_8X16_COMMON),y)
 subdir- := qcom
+endif
+ifeq ($(CONFIG_TCT_8X16_IDOL347),y)
+subdir- := idol347
+endif
+
 endif
 
 # *.dtb used to be generated in the directory above. Clean out the

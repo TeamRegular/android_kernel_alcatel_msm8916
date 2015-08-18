@@ -21,6 +21,10 @@
 
 #define HANDLE_TO_IDX(handle) (handle & 0xFF)
 
+// TCT-NB-DYH-Remove duplicate definition of macro MSM_ISP_MIN_AB 
+//#define MSM_ISP_MIN_AB 450000000 
+//#define MSM_ISP_MIN_IB 900000000
+
 int msm_isp_axi_create_stream(
 	struct msm_vfe_axi_shared_data *axi_data,
 	struct msm_vfe_axi_stream_request_cmd *stream_cfg_cmd)

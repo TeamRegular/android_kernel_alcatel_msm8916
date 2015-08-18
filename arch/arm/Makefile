@@ -280,7 +280,12 @@ ifeq ($(CONFIG_USE_OF),y)
 KBUILD_DTBS := dtbs
 endif
 
+ifneq ($(CONFIG_TCT_8X16_COMMON),y)
 DTSSUBDIR := qcom
+endif
+ifeq ($(CONFIG_TCT_8X16_IDOL347),y)
+DTSSUBDIR := idol347
+endif
 
 all:	$(KBUILD_IMAGE) $(KBUILD_DTBS)
 
@@ -304,6 +309,13 @@ zinstall uinstall install: vmlinux
 dtbs: scripts
 	$(Q)$(MAKE) $(build)=$(boot)/dts MACHINE=$(MACHINE) dtbs
 	$(foreach DIR, $(DTSSUBDIR), $(Q)$(MAKE) $(build)=$(boot)/dts/$(DIR) MACHINE=$(MACHINE) dtbs)
+
+#ifndef CONFIG_TCT_8X16_COMMON
+#	$(Q)$(MAKE) $(build)=$(boot)/dts/qcom dtbs
+#endif
+#ifdef CONFIG_TCT_8X16_IDOL347
+#	$(Q)$(MAKE) $(build)=$(boot)/dts/idol347 dtbs
+#endif
 
 zImage-dtb: vmlinux scripts dtbs
 	$(Q)$(MAKE) $(build)=$(boot) MACHINE=$(MACHINE) DTSSUBDIR=$(DTSSUBDIR) $(boot)/$@

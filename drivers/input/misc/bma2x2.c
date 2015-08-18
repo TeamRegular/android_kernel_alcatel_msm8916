@@ -1365,7 +1365,8 @@ static const struct interrupt_map_t int_map[] = {
 #endif/*End of CONFIG_SENSORS_BMI058*/
 
 /*BMA power supply VDD 1.62V-3.6V VIO 1.2-3.6V */
-#define BMA2x2_VDD_MIN_UV       2000000
+// [Bug SW.Alto5_Global 724579 ] modify by xcb 2014-07-22
+#define BMA2x2_VDD_MIN_UV       1700000
 #define BMA2x2_VDD_MAX_UV       3400000
 #define BMA2x2_VIO_MIN_UV       1500000
 #define BMA2x2_VIO_MAX_UV       3400000

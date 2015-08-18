@@ -25,7 +25,11 @@
 #include "mdss_dsi.h"
 
 #define DT_CMD_HDR 6
-
+#ifdef CONFIG_TCT_8X16_POP10
+//[PLATFORM]-Add-BEGIN by TCTSZ.jing.huang, 2014/08/19, use nanosecond to increase accuracy
+#define NSECS_PER_USEC 1000ULL
+//[PLATFORM]-Add-END by TCTSZ.jing.huang, 2014/08/19
+#endif
 /* NT35596 panel specific status variables */
 #define NT35596_BUF_3_STATUS 0x02
 #define NT35596_BUF_4_STATUS 0x40
@@ -46,14 +50,18 @@ void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
 		pr_err("%s: Error: lpg_chan=%d pwm request failed",
 				__func__, ctrl->pwm_lpg_chan);
 	}
+/*Start modify backlight flicker when we adjust the brightness By ChangShengBao*/
+#if (defined CONFIG_TCT_8X16_IDOL347 || defined CONFIG_TCT_8X16_IDOL3)	/*TCTNB.CY, PR-891676, modify for backlight blink*/
 	ctrl->pwm_enabled = 0;
+#endif
+/*End modify backlight flicker when we adjust the brightness By ChangShengBao*/
 }
 
 static void mdss_dsi_panel_bklt_pwm(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 {
 	int ret;
 	u32 duty;
-	u32 period_ns;
+//	u32 period_ns;
 
 	if (ctrl->pwm_bl == NULL) {
 		pr_err("%s: no PWM\n", __func__);
@@ -82,33 +90,48 @@ static void mdss_dsi_panel_bklt_pwm(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 
 	pr_debug("%s: ndx=%d level=%d duty=%d\n", __func__,
 					ctrl->ndx, level, duty);
-
-	if (ctrl->pwm_period >= USEC_PER_SEC) {
-		ret = pwm_config_us(ctrl->pwm_bl, duty, ctrl->pwm_period);
-		if (ret) {
-			pr_err("%s: pwm_config_us() failed err=%d.\n",
-					__func__, ret);
-			return;
-		}
-	} else {
-		period_ns = ctrl->pwm_period * NSEC_PER_USEC;
-		ret = pwm_config(ctrl->pwm_bl,
-				level * period_ns / ctrl->bklt_max,
-				period_ns);
-		if (ret) {
-			pr_err("%s: pwm_config() failed err=%d.\n",
-					__func__, ret);
-			return;
-		}
+/*Start modify backlight flicker when we adjust the brightness By ChangShengBao*/
+#if (defined CONFIG_TCT_8X16_IDOL347 || defined CONFIG_TCT_8X16_IDOL3)	/*TCTNB.CY, PR-891676, modify for backlight blink*/
+//remove these code
+#else
+	if (ctrl->pwm_enabled) {
+		pwm_disable(ctrl->pwm_bl);
+		ctrl->pwm_enabled = 0;
 	}
+#endif
+/*End modify backlight flicker when we adjust the brightness By ChangShengBao*/
 
+#ifdef CONFIG_TCT_8X16_POP10
+//[PLATFORM]-Add-BEGIN by TCTSZ.jing.huang, 2014/08/19, use nanosecond to increase accuracy
+	ret = pwm_config_ns(ctrl->pwm_bl, duty, ctrl->pwm_period);
+		if (ret) {
+		pr_err("%s: pwm_config_ns() failed err=%d.\n", __func__, ret);
+			return;
+		}
+//[PLATFORM]-Add-END by TCTSZ.jing.huang, 2014/08/19
+#else
+	ret = pwm_config_us(ctrl->pwm_bl, duty, ctrl->pwm_period);
+		if (ret) {
+		pr_err("%s: pwm_config_us() failed err=%d.\n", __func__, ret);
+			return;
+		}
+#endif
+/*Start modify backlight flicker when we adjust the brightness By ChangShengBao*/
+#if (defined CONFIG_TCT_8X16_IDOL347 || defined CONFIG_TCT_8X16_IDOL3)	/*TCTNB.CY, PR-891676, modify for backlight blink*/
 	if (!ctrl->pwm_enabled) {
 		ret = pwm_enable(ctrl->pwm_bl);
 		if (ret)
-			pr_err("%s: pwm_enable() failed err=%d\n", __func__,
-				ret);
+		 pr_err("%s: pwm_enable() failed err=%d\n", __func__,ret);
 		ctrl->pwm_enabled = 1;
 	}
+#else
+
+	ret = pwm_enable(ctrl->pwm_bl);
+	if (ret)
+		pr_err("%s: pwm_enable() failed err=%d\n", __func__, ret);
+	ctrl->pwm_enabled = 1;
+#endif
+/*End modify backlight flicker when we adjust the brightness By ChangShengBao*/
 }
 
 static char dcs_cmd[2] = {0x54, 0x00}; /* DTYPE_DCS_READ */
@@ -223,6 +246,7 @@ static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 			rc);
 		goto rst_gpio_err;
 	}
+
 	if (gpio_is_valid(ctrl_pdata->bklt_en_gpio)) {
 		rc = gpio_request(ctrl_pdata->bklt_en_gpio,
 						"bklt_enable");
@@ -293,8 +317,13 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 				gpio_set_value((ctrl_pdata->disp_en_gpio), 1);
 
 			for (i = 0; i < pdata->panel_info.rst_seq_len; ++i) {
-				gpio_set_value((ctrl_pdata->rst_gpio),
-					pdata->panel_info.rst_seq[i]);
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, PR-789023, 2014/11/20, add r63315 lcd reset */
+#ifdef CONFIG_TCT_8X16_IDOL3
+				gpio_direction_output((ctrl_pdata->rst_gpio), pdata->panel_info.rst_seq[i]);
+#else
+				gpio_set_value((ctrl_pdata->rst_gpio), pdata->panel_info.rst_seq[i]);
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY */
 				if (pdata->panel_info.rst_seq[++i])
 					usleep(pinfo->rst_seq[i] * 1000);
 			}
@@ -324,9 +353,24 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
 			gpio_free(ctrl_pdata->disp_en_gpio);
 		}
-		gpio_set_value((ctrl_pdata->rst_gpio), 0);
-		gpio_free(ctrl_pdata->rst_gpio);
-		if (gpio_is_valid(ctrl_pdata->mode_gpio))
+/*Tianhongwei add for PR.834021 2014/11/14*/
+#ifdef CONFIG_TCT_8X16_ALTO5
+			for (i = 0; i < pdata->panel_info.rst_seq_len; ++i) {
+				gpio_set_value((ctrl_pdata->rst_gpio),
+					pdata->panel_info.rst_seq[i]);
+				if (pdata->panel_info.rst_seq[++i])
+					usleep(pinfo->rst_seq[i] * 1000);
+			}
+		msleep(20);
+#endif
+/*Tianhongwei end */
+/*Start sleep in mode. panel reset High-Low-delay5ms-High By ChangShengBao*/
+#ifndef CONFIG_TCT_8X16_IDOL347
+                gpio_set_value((ctrl_pdata->rst_gpio), 0);
+                gpio_free(ctrl_pdata->rst_gpio);
+#endif
+/*End sleep in mode. panel reset High-Low-delay5ms-High By ChangShengBao*/
+		if(gpio_is_valid(ctrl_pdata->mode_gpio))
 			gpio_free(ctrl_pdata->mode_gpio);
 	}
 	return rc;
@@ -1012,6 +1056,36 @@ static int mdss_dsi_parse_reset_seq(struct device_node *np,
 	return 0;
 }
 
+#ifdef CONFIG_TCT_8X16_IDOL347
+#define REG_BUF_0_STATUS 0x81
+#define REG_BUF_1_STATUS 0x73
+#define REG_BUF_2_STATUS 0x06
+//#define REG_BUF_3_STATUS 0x80
+static int mdss_dsi_hx8394d_read_status(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+	if ((ctrl_pdata->status_buf.data[0] !=
+					REG_BUF_0_STATUS) || (ctrl_pdata->status_buf.data[1] !=
+					REG_BUF_1_STATUS)||(ctrl_pdata->status_buf.data[2] !=
+					REG_BUF_2_STATUS)) {
+		pr_err("%s: Read back value from panel is incorrect\n",
+							__func__);
+		return -EINVAL;
+	} else {
+		return 1;
+	}
+}
+static int mdss_dsi_hx8394d_read_status_for_one(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+     if (ctrl_pdata->status_buf.data[0] !=
+					ctrl_pdata->status_value_for_one) {
+		pr_err("%s: Read back value from panel is incorrect\n",
+							__func__);
+		return -EINVAL;
+	} else {
+		return 1;
+	}
+}
+#endif
 static int mdss_dsi_gen_read_status(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
 	if (ctrl_pdata->status_buf.data[0] !=
@@ -1432,7 +1506,13 @@ static int mdss_panel_parse_dt(struct device_node *np,
 						__func__, __LINE__);
 				return -EINVAL;
 			}
+#ifdef CONFIG_TCT_8X16_POP10
+//[PLATFORM]-Add-BEGIN by TCTSZ.jing.huang, 2014/08/19, use nanosecond to increase accuracy
+			ctrl_pdata->pwm_period = tmp * NSECS_PER_USEC;
+//[PLATFORM]-Add-END by TCTSZ.jing.huang, 2014/08/19
+#else
 			ctrl_pdata->pwm_period = tmp;
+#endif
 			if (ctrl_pdata->pwm_pmi) {
 				ctrl_pdata->pwm_bl = of_pwm_get(np, NULL);
 				if (IS_ERR(ctrl_pdata->pwm_bl)) {
@@ -1611,6 +1691,13 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->status_cmds,
 			"qcom,mdss-dsi-panel-status-command",
 				"qcom,mdss-dsi-panel-status-command-state");
+	#ifdef CONFIG_TCT_8X16_IDOL347
+	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->status_cmds_for_one,
+			"qcom,mdss-dsi-panel-status-command_for_one",
+				"qcom,mdss-dsi-panel-status-command-state");
+	rc = of_property_read_u32(np, "qcom,mdss-dsi-panel-status-value_for_one", &tmp);
+	ctrl_pdata->status_value_for_one= (!rc ? tmp : 0);
+	#endif
 	rc = of_property_read_u32(np, "qcom,mdss-dsi-panel-status-value", &tmp);
 	ctrl_pdata->status_value = (!rc ? tmp : 0);
 
@@ -1632,6 +1719,16 @@ static int mdss_panel_parse_dt(struct device_node *np,
 			ctrl_pdata->status_cmds_rlen = 8;
 			ctrl_pdata->check_read_status =
 						mdss_dsi_nt35596_read_status;
+#ifdef CONFIG_TCT_8X16_IDOL347
+                } else if (!strcmp(data, "reg_read_hx8394d")) {
+			ctrl_pdata->status_mode = ESD_REG_HX8394D;
+			ctrl_pdata->status_cmds_rlen = 3;
+			ctrl_pdata->status_cmds_rlen_for_one= 1;
+			ctrl_pdata->check_read_status =
+						mdss_dsi_hx8394d_read_status;
+			ctrl_pdata->check_read_status_for_one=
+			mdss_dsi_hx8394d_read_status_for_one;
+#endif
 		} else if (!strcmp(data, "te_signal_check")) {
 			if (pinfo->mipi.mode == DSI_CMD_MODE)
 				ctrl_pdata->status_mode = ESD_TE;
@@ -1694,6 +1791,9 @@ int mdss_dsi_panel_init(struct device_node *node,
 
 	pinfo->dynamic_switch_pending = false;
 	pinfo->is_lpm_mode = false;
+#ifdef CONFIG_TCT_8X16_IDOL347
+        pinfo->esd_rdy = false;
+#endif
 
 	ctrl_pdata->on = mdss_dsi_panel_on;
 	ctrl_pdata->off = mdss_dsi_panel_off;

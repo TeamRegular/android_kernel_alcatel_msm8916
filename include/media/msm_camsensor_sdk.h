@@ -5,7 +5,9 @@
 
 #define KVERSION 0x1
 
-#define MAX_POWER_CONFIG      12
+/* [PLATFORM]-Add-BEGIN by TCTSZ.luzhi, because power up setting size is bigger than 12 2014/10/13*/
+#define MAX_POWER_CONFIG      15
+/* [PLATFORM]-Add-END by TCTSZ.luzhi, 2014/10/13*/
 #define GPIO_OUT_LOW          (0 << 1)
 #define GPIO_OUT_HIGH         (1 << 1)
 #define CSI_EMBED_DATA        0x12
@@ -135,10 +137,13 @@ enum msm_actuator_addr_type {
 	MSM_ACTUATOR_WORD_ADDR,
 };
 
+/* [PLATFORM]-Mod-BEGIN by TCTNB.YJ, add for rear camera on idol3  */
 enum msm_actuator_write_type {
 	MSM_ACTUATOR_WRITE_HW_DAMP,
 	MSM_ACTUATOR_WRITE_DAC,
+	MSM_ACTUATOR_WRITE_AK7348,
 };
+/* [PLATFORM]-Mod-END by TCTNB.YJ*/
 
 enum msm_actuator_i2c_operation {
 	MSM_ACT_WRITE = 0,

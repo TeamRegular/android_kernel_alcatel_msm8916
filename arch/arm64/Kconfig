@@ -584,6 +584,58 @@ config SYSVIPC_COMPAT
 	def_bool y
 	depends on COMPAT && SYSVIPC
 
+config TCT_8X16_COMMON
+        depends on ARCH_MSM8916
+        bool "MSM8916 TCT COMMON"
+        help
+          Support for the TCT COMMON device.
+
+config TCT_8X16_ALTO5
+        depends on ARCH_MSM8916
+        bool "MSM8916 ALTO5"
+        help
+          Support for the TCT ALTO5 device.
+
+config TCT_8X16_ALTO4
+        depends on ARCH_MSM8916
+        bool "MSM8916 ALTO4"
+        help
+          Support for the TCT ALTO4 device.
+
+config TCT_8X16_ALTO45_LATAM_B28
+        depends on ARCH_MSM8916
+        bool "MSM8916 ALTO45_LATAM_B28"
+        help
+          Support for the TCT ALTO45_LATAM_B28 device.
+
+config TCT_8X16_ALTO5_VDF
+        depends on ARCH_MSM8916
+        bool "MSM8916 ALTO5_VDF"
+        help
+          Support for the TCT ALTO5_VDF device.
+
+config TCT_8X16_ALTO5_PREMIUM
+        depends on ARCH_MSM8916
+        bool "MSM8916 ALTO5_PREMIUM"
+        help
+          Support for the TCT ALTO5_PREMIUM device.
+
+config TCT_8X16_IDOL3
+        depends on ARCH_MSM8916
+        bool "MSM8916 IDOL3"
+        help
+          Support for the TCT IDOL3 device.
+config TCT_8X16_POP10
+        depends on ARCH_MSM8916
+        bool "MSM8916 POP10"
+        help
+          Support for the TCT POP10 device.
+config TCT_8X16_IDOL347
+        depends on ARCH_MSM8916
+        bool "MSM8916 IDOL347"
+        help
+          Support for the TCT IDOL347 device.
+
 endmenu
 
 menu "Power management options"
@@ -630,3 +682,5 @@ endif
 source "lib/Kconfig"
 
 source "arch/arm64/mm/Kconfig"
+
+

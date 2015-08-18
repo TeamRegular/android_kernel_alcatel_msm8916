@@ -484,9 +484,17 @@ static bool is_battery_charging(struct qpnp_bms_chip *chip)
 		chip->batt_psy = power_supply_get_by_name("battery");
 	if (chip->batt_psy) {
 		/* if battery has been registered, use the type property */
+//[FixBug]-Add-BGEIN by TCTSZ.leo.guo,2014/11/11, add battery curve parameter.
+#ifdef CONFIG_TCT_8X16_POP10
+                chip->batt_psy->get_property(chip->batt_psy,
+                                        POWER_SUPPLY_PROP_CHARGING_ENABLED, &ret);
+                return ret.intval;
+#else
 		chip->batt_psy->get_property(chip->batt_psy,
 					POWER_SUPPLY_PROP_CHARGE_TYPE, &ret);
 		return ret.intval != POWER_SUPPLY_CHARGE_TYPE_NONE;
+#endif
+//[FixBug]-Add-END by TCTSZ.leo.guo.
 	}
 
 	/* Default to false if the battery power supply is not registered. */
@@ -1188,8 +1196,15 @@ static int get_battery_status(struct qpnp_bms_chip *chip)
 		chip->batt_psy = power_supply_get_by_name("battery");
 	if (chip->batt_psy) {
 		/* if battery has been registered, use the status property */
+/* [PLATFORM]-Mod-BEGIN by TCTNB.FLF, PR-829665, 2014/11/12, fix capacity drops after charging full */
+#ifdef CONFIG_TCT_8X16_COMMON
+		chip->batt_psy->get_property(chip->batt_psy,
+					POWER_SUPPLY_PROP_BATT_STATUS, &ret);
+#else
 		chip->batt_psy->get_property(chip->batt_psy,
 					POWER_SUPPLY_PROP_STATUS, &ret);
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.FLF */
 		return ret.intval;
 	}
 
@@ -1202,6 +1217,12 @@ static int get_batt_therm(struct qpnp_bms_chip *chip, int *batt_temp)
 {
 	int rc;
 	struct qpnp_vadc_result result;
+/* [PLATFORM]-Mod-BEGIN by TCTNB.FLF, FR-644906, 2014/05/04, disable tem check for mini */
+#ifdef FEATURE_TCTNB_MMITEST
+		*batt_temp = BMS_DEFAULT_TEMP;
+		return 0;
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.FLF */
 
 	rc = qpnp_vadc_read(chip->vadc_dev, LR_MUX1_BATT_THERM, &result);
 	if (rc) {
@@ -1395,8 +1416,15 @@ static int report_eoc(struct qpnp_bms_chip *chip)
 	if (chip->batt_psy == NULL)
 		chip->batt_psy = power_supply_get_by_name("battery");
 	if (chip->batt_psy) {
+/* [PLATFORM]-Mod-BEGIN by TCTNB.FLF, PR-829665, 2014/11/12, fix capacity drops after charging full */
+#ifdef CONFIG_TCT_8X16_COMMON
+		rc = chip->batt_psy->get_property(chip->batt_psy,
+				POWER_SUPPLY_PROP_BATT_STATUS, &ret);
+#else
 		rc = chip->batt_psy->get_property(chip->batt_psy,
 				POWER_SUPPLY_PROP_STATUS, &ret);
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.FLF */
 		if (rc) {
 			pr_err("Unable to get battery 'STATUS' rc=%d\n", rc);
 		} else if (ret.intval != POWER_SUPPLY_STATUS_FULL) {
@@ -1483,6 +1511,11 @@ static void check_eoc_condition(struct qpnp_bms_chip *chip)
 					 */
 					chip->ocv_at_100 = chip->last_ocv_uv;
 					pr_debug("Battery FULL\n");
+/* [PLATFORM]-Add-BEGIN by TCTNB.FLF, FR-837171, 2014/11/14, add log for charger autotest */
+#ifdef CONFIG_TCT_8X16_COMMON
+					pr_err("TCTNB_FULL Battery FULL\n");
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.FLF */
 				} else {
 					pr_err("Unable to report eoc rc=%d\n",
 							rc);
@@ -3060,6 +3093,9 @@ static int show_bms_config(struct seq_file *m, void *data)
 	int s1_sample_interval, s2_sample_interval;
 	int s1_sample_count, s2_sample_count;
 	int s1_fifo_length, s2_fifo_length;
+/* [PLATFORM]-Add-BEGIN by TCTNB.FLF, FR-738627, FR-813428, 2014/10/31, read battery id */
+	int64_t battery_id = read_battery_id(chip);
+/* [PLATFORM]-Add-END by TCTNB.FLF */
 
 	get_sample_interval(chip, S1_STATE, &s1_sample_interval);
 	get_sample_interval(chip, S2_STATE, &s2_sample_interval);
@@ -3068,7 +3104,8 @@ static int show_bms_config(struct seq_file *m, void *data)
 	get_fifo_length(chip, S1_STATE, &s1_fifo_length);
 	get_fifo_length(chip, S2_STATE, &s2_fifo_length);
 
-	seq_printf(m, "r_conn_mohm\t=\t%d\n"
+	seq_printf(m, "batt_id_uv\t=\t%lld\n"	/* [PLATFORM]-Add-BEGIN by TCTNB.FLF, add battery id */
+			"r_conn_mohm\t=\t%d\n"
 			"v_cutoff_uv\t=\t%d\n"
 			"max_voltage_uv\t=\t%d\n"
 			"use_voltage_soc\t=\t%d\n"
@@ -3089,6 +3126,9 @@ static int show_bms_config(struct seq_file *m, void *data)
 			"s2_sample_count\t=\t%d\n"
 			"s1_fifo_length\t=\t%d\n"
 			"s2_fifo_length\t=\t%d\n",
+/* [PLATFORM]-Add-BEGIN by TCTNB.FLF, FR-738627, FR-813428, 2014/10/31, read battery id */
+			battery_id,
+/* [PLATFORM]-Add-END by TCTNB.FLF */
 			chip->dt.cfg_r_conn_mohm,
 			chip->dt.cfg_v_cutoff_uv,
 			chip->dt.cfg_max_voltage_uv,
@@ -3991,7 +4031,10 @@ static int __init qpnp_vm_bms_init(void)
 {
 	return spmi_driver_register(&qpnp_vm_bms_driver);
 }
-module_init(qpnp_vm_bms_init);
+/*yongzhong.cheng:PR746257,2014/7/28,fix cannot enumeration charger type,start*/
+//module_init(qpnp_vm_bms_init);
+late_initcall(qpnp_vm_bms_init);
+/*yongzhong.cheng:PR746257,2014/7/28,fix cannot enumeration charger type,end*/
 
 static void __exit qpnp_vm_bms_exit(void)
 {

@@ -111,6 +111,11 @@ config MSM_ISPIF_V1
           of any CID of MSM_CSI22_HEADER can be routed to of pixel
           or raw data interface in VFE.
 
+config GC0339_ALTO5
+	bool "Sensor GC0339_ALTO5 (BAYER .3M)"
+	depends on MSMB_CAMERA
+	---help---
+		gc0339 is a Galaxycore .3 MP Bayer Sensor.
 config IMX134
 	bool "Sensor IMX134 (BAYER 8M)"
 	depends on MSMB_CAMERA
@@ -200,6 +205,30 @@ config GC0339
 		Preview and snapshot resolution shall be 640*480 at 30 fps,
 		It does not support auto focus.
 
+config HI351
+	bool "Sensor HI351 (YUV 3M)"
+	depends on MSMB_CAMERA
+	---help---
+		hi351 is a Galaxycore 3 MP YUV Sensor.
+#[PLATFORM]-Add-BEGIN by TCTSZ.yaohui.zeng, 2014/07/26, Add 1st Front camera Hi258 for POP10
+config HI258_POP10
+        bool "Sensor HI258 (YUV 2M)"
+        depends on MSMB_CAMERA
+        ---help---
+                hi258 is a 2MP YUV Sensor.
+                It supports 1 or 2 mipi lanes.
+                It does not support auto focus.
+#[PLATFORM]-Add-END by TCTSZ.yaohui.zeng, 2014/07/26
+
+#[PLATFORM]-Add-BEGIN by TCTSZ.yaohui.zeng, 2014/09/18, Add 2nd Front camera GC2145 for POP10
+config GC2145_POP10
+       bool "Sensor GC2145 (BAYER 2M)"
+       depends on MSMB_CAMERA
+       ---help---
+               gc2145 is a Galaxycore 2 MP Bayer Sensor.
+               It supports 1 or 2 mipi lanes.
+               It does not support auto focus.
+#[PLATFORM]-Add-END by TCTSZ.yaohui.zeng, 2014/09/18
 config OV8825
 	bool "OmniVision OV8825 (BAYER 8MP)"
 	depends on MSMB_CAMERA

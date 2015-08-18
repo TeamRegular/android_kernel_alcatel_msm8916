@@ -1010,11 +1010,18 @@ static int qpnp_pon_config_init(struct qpnp_pon *pon)
 				}
 			}
 
+			pr_info("[Liu]%s: pon_ver=%d\n", __func__, pon_ver);
 			/* If the value read from REVISION2 register is 0x00,
 			   then there is a single register to control s2 reset.
 			   Otherwise there are separate registers for s2 reset
 			   type and s2 reset enable */
+/*MOD Begin by TCTSZ-WH,Fix long press power key no response.*/
+#ifdef CONFIG_TCT_8X16_POP10
+			if (pon_ver == 3) {
+#else
 			if (pon_ver == PON_REV2_VALUE) {
+#endif
+/*MOD by End TCTSZ-WH,Fix long press power key no response.*/
 				cfg->s2_cntl_addr = cfg->s2_cntl2_addr =
 					QPNP_PON_KPDPWR_S2_CNTL(pon->base);
 			} else {
@@ -1143,7 +1150,14 @@ static int qpnp_pon_config_init(struct qpnp_pon *pon)
 								cfg->pon_type);
 			return -EINVAL;
 		}
-
+#ifdef  CONFIG_TCTNB_LONGPRESS_DISABLE /*#[BUGFIX]-ADD by TCTNB.XQJ,09/25/2014,PR-791880.for disable hard reset ,hardware test*/
+                cfg->support_reset=0;
+#endif
+/*JRD BSP START eric.gong@tcl.com "[idol3-4.7][charger] long press power key do not reboot" 2015/01/09*/
+#ifdef	CONFIG_IDOL347_PKYLONGPRESS_DISABLE
+				cfg->support_reset=0;
+#endif
+/*JRD BSP END eric.gong@tcl.com "[idol3-4.7][charger] long press power key do not reboot" 2015/01/09*/
 		if (cfg->support_reset) {
 			/*
 			 * Get the reset parameters (bark debounce time and
@@ -1578,7 +1592,14 @@ static int qpnp_pon_probe(struct spmi_device *spmi)
 		s3_src_reg = QPNP_PON_S3_SRC_KPDPWR_OR_RESIN;
 	else /* default combination */
 		s3_src_reg = QPNP_PON_S3_SRC_KPDPWR_AND_RESIN;
-
+ #ifdef  CONFIG_TCTNB_LONGPRESS_DISABLE  /*#[BUGFIX]-ADD by TCTNB.XQJ,09/25/2014,PR-791880.for disable hard reset ,hardware test*/
+          s3_src_reg=QPNP_PON_S3_SRC_RESIN;
+#endif
+/*JRD BSP START eric.gong@tcl.com "[idol3-4.7][charger] long press power key do not reboot" 2015/01/09*/
+#ifdef	CONFIG_IDOL347_PKYLONGPRESS_DISABLE
+	  s3_src_reg=QPNP_PON_S3_SRC_RESIN;
+#endif
+/*JRD BSP END eric.gong@tcl.com "[idol3-4.7][charger] long press power key do not reboot" 2015/01/09*/
 	/* S3 source is a write once register. If the register has
 	 * been configured by bootloader then this operation will
 	 * not be effective. */
@@ -1620,7 +1641,14 @@ static int qpnp_pon_probe(struct spmi_device *spmi)
 		dev_err(&spmi->dev, "sys file creation failed\n");
 		return rc;
 	}
-
+#ifdef  CONFIG_TCTNB_LONGPRESS_DISABLE  /*#[BUGFIX]-ADD by TCTNB.XQJ,09/25/2014,PR-791880.for disable hard reset ,hardware test*/
+      qpnp_pon_wd_config(0);
+#endif
+/*JRD BSP START eric.gong@tcl.com "[idol3-4.7][charger] long press power key do not reboot" 2015/01/09*/
+#ifdef	CONFIG_IDOL347_PKYLONGPRESS_DISABLE
+	  qpnp_pon_wd_config(0);
+#endif
+/*JRD BSP END eric.gong@tcl.com "[idol3-4.7][charger] long press power key do not reboot" 2015/01/09*/
 	qpnp_pon_debugfs_init(spmi);
 	return rc;
 }

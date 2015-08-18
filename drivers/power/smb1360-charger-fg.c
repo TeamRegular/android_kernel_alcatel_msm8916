@@ -40,6 +40,7 @@
 #define CHG_ITERM_MASK			SMB1360_MASK(2, 0)
 #define CHG_ITERM_25MA			0x0
 #define CHG_ITERM_200MA			0x7
+
 #define RECHG_MV_MASK			SMB1360_MASK(6, 5)
 #define RECHG_MV_SHIFT			5
 #define OTG_CURRENT_MASK		SMB1360_MASK(4, 3)
@@ -80,6 +81,11 @@
 
 #define CFG_BATT_MISSING_REG		0x0D
 #define BATT_MISSING_SRC_THERM_BIT	BIT(1)
+/* [PLATFORM]-Mod-BEGIN by TCTNB.FLF, PR-790435, 2014/11/12, fix irq blocks booting up*/
+#ifdef CONFIG_TCT_8X16_IDOL3
+#define BATT_MISSING_SRC_BMD_BIT	BIT(0)
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.FLF */
 
 #define CFG_FG_BATT_CTRL_REG		0x0E
 #define CFG_FG_OTP_BACK_UP_ENABLE	BIT(7)
@@ -239,6 +245,10 @@
 
 #define FG_RESET_THRESHOLD_MV		15
 #define SMB1360_REV_1			0x01
+#define SMB1360_REV_3           0x03
+
+static int autotest=0;
+module_param_named(autotest_enable, autotest, int, S_IWUSR | S_IRUGO);
 
 enum {
 	WRKRND_FG_CONFIG_FAIL = BIT(0),
@@ -250,6 +260,7 @@ enum {
 enum {
 	USER	= BIT(0),
 };
+
 
 enum fg_i2c_access_type {
 	FG_ACCESS_CFG = 0x1,
@@ -277,6 +288,11 @@ struct smb1360_chip {
 	u8				soft_hot_rt_stat;
 	u8				soft_cold_rt_stat;
 	struct delayed_work		jeita_work;
+/* [PLATFORM]-Add-BEGIN by TCTNB.WJ, Port from PR-888729, 2015/02/06, add power off condition */
+#ifdef CONFIG_TCT_8X16_COMMON
+	struct delayed_work         low_voltage_detect_work;
+#endif
+/* [PLATFORM]-Add-END by TCTNB.WJ */
 	unsigned short			default_i2c_addr;
 	unsigned short			fg_i2c_addr;
 	bool				pulsed_irq;
@@ -344,6 +360,7 @@ struct smb1360_chip {
 	bool				batt_full;
 	bool				resume_completed;
 	bool				irq_waiting;
+    bool				irq_disabled;
 	bool				empty_soc;
 	bool				awake_min_soc;
 	int				workaround_flags;
@@ -352,7 +369,6 @@ struct smb1360_chip {
 	int				charging_disabled_status;
 	u32				connected_rid;
 	u32				profile_rid[BATTERY_PROFILE_MAX];
-
 	u32				peek_poke_address;
 	u32				fg_access_type;
 	u32				fg_peek_poke_address;
@@ -369,7 +385,13 @@ struct smb1360_chip {
 	struct mutex			current_change_lock;
 	struct mutex			read_write_lock;
 };
-
+/* [PLATFORM]-Add-BEGIN by TCTNB.WJ, Port from PR-888729, 2015/02/06, add power off condition */
+#ifdef CONFIG_TCT_8X16_COMMON
+#ifndef FEATURE_TCTNB_MMITEST
+static bool recheck_flag = true;
+#endif
+#endif
+/* [PLATFORM]-Add-END by TCTNB.WJ */
 static int chg_time[] = {
 	192,
 	384,
@@ -419,7 +441,7 @@ static int __smb1360_read(struct smb1360_chip *chip, int reg,
 	} else {
 		*val = ret;
 	}
-	pr_debug("Reading 0x%02x=0x%02x\n", reg, *val);
+	//pr_debug("Reading 0x%02x=0x%02x\n", reg, *val);
 
 	return 0;
 }
@@ -436,7 +458,7 @@ static int __smb1360_write(struct smb1360_chip *chip, int reg,
 			val, reg, ret);
 		return ret;
 	}
-	pr_debug("Writing 0x%02x=0x%02x\n", reg, val);
+	//pr_debug("Writing 0x%02x=0x%02x\n", reg, val);
 	return 0;
 }
 
@@ -592,7 +614,7 @@ static int64_t float_decode(u16 reg)
 	mantissa = (reg & MANTISSA_MASK);
 	sign = !!(reg & SIGN_MASK);
 
-	pr_debug("exponent=%d mantissa=%d sign=%d\n", exponent, mantissa, sign);
+	//pr_debug("exponent=%d mantissa=%d sign=%d\n", exponent, mantissa, sign);
 
 	mantissa_val = mantissa * MICRO_UNIT;
 
@@ -1385,6 +1407,74 @@ static int smb1360_battery_is_writeable(struct power_supply *psy,
 	return rc;
 }
 
+#ifdef FEATURE_TCTNB_MMITEST
+static int smb1360_battery_get_property(struct power_supply *psy,
+				       enum power_supply_property prop,
+				       union power_supply_propval *val)
+{
+	struct smb1360_chip *chip = container_of(psy,
+				struct smb1360_chip, batt_psy);
+       int temp;
+	switch (prop) {
+	case POWER_SUPPLY_PROP_HEALTH:
+		temp = smb1360_get_prop_batt_health(chip);
+		val->intval = POWER_SUPPLY_HEALTH_GOOD;
+		break;
+	case POWER_SUPPLY_PROP_PRESENT:
+		temp = smb1360_get_prop_batt_present(chip);
+		val->intval = 1;
+		break;
+	case POWER_SUPPLY_PROP_STATUS:
+		val->intval = smb1360_get_prop_batt_status(chip);
+		break;
+	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+		val->intval = smb1360_get_prop_charging_status(chip);
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_TYPE:
+		val->intval = smb1360_get_prop_charge_type(chip);
+		break;
+/* [PLATFORM]-Mod-BEGIN by TCTNB.YQJ, PR-921940, 2015/02/03, return the real battery capacity on mini sw */
+	case POWER_SUPPLY_PROP_CAPACITY:
+		val->intval = smb1360_get_prop_batt_capacity(chip);
+		if (chip->batt_present == 0)
+			val->intval = 50;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+		val->intval = smb1360_get_prop_chg_full_design(chip);
+		if (chip->batt_present == 0)
+			val->intval = 3000000;
+		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+		val->intval = smb1360_get_prop_voltage_now(chip);
+		if (chip->batt_present == 0)
+			val->intval = 3900000;
+/* [PLATFORM]-Add-BEGIN by TCTNB.WJ, Port from PR-888729, 2015/02/06, add power off condition */
+		if (val->intval <= 3100000)
+			val->intval = 3101000;
+/* [PLATFORM]-Add-END by TCTNB.WJ */
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		val->intval = smb1360_get_prop_current_now(chip);
+		break;
+	case POWER_SUPPLY_PROP_RESISTANCE:
+		val->intval = smb1360_get_prop_batt_resistance(chip);
+		if (chip->batt_present == 0)
+			val->intval = 100000;
+		break;
+/* [PLATFORM]-Mod-END by TCTNB.YQJ*/
+	case POWER_SUPPLY_PROP_TEMP:
+		temp = smb1360_get_prop_batt_temp(chip);\
+		val->intval = 250;
+		break;
+	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
+		val->intval = chip->therm_lvl_sel;
+		break;
+	default:
+		return -EINVAL;
+	}
+	return 0;
+}
+#else
 static int smb1360_battery_get_property(struct power_supply *psy,
 				       enum power_supply_property prop,
 				       union power_supply_propval *val)
@@ -1407,15 +1497,36 @@ static int smb1360_battery_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
 		val->intval = smb1360_get_prop_charge_type(chip);
+		if(autotest)
+            printk("TCTNB_FASTCHG:%d\n", (val->intval > 1) ? (val->intval) : 0);
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		val->intval = smb1360_get_prop_batt_capacity(chip);
+		if(autotest)
+			printk("TCTNB_SOC:%d\n", val->intval);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 		val->intval = smb1360_get_prop_chg_full_design(chip);
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		val->intval = smb1360_get_prop_voltage_now(chip);
+
+/* [PLATFORM]-Add-BEGIN by TCTNB.WJ, Port from PR-888729, 2015/02/06, add power off condition */
+#ifdef CONFIG_TCT_8X16_COMMON
+		if (unlikely(val->intval > 3100000 && recheck_flag == false)) {
+			cancel_delayed_work(&chip->low_voltage_detect_work);
+			recheck_flag = true;
+		}
+		if (unlikely(val->intval <= 3100000 && recheck_flag == true /* && chip->usb_present */ )) {
+			recheck_flag = false;
+			val->intval = 3101000;
+			schedule_delayed_work(&chip->low_voltage_detect_work, msecs_to_jiffies(5000));
+			pr_err("Recheck battery voltage in 5 seconds!\n");
+		}
+#endif
+/* [PLATFORM]-Add-END by TCTNB.WJ */
+		if(autotest)
+			printk("TCTNB_VOL:%d\n", val->intval);
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		val->intval = smb1360_get_prop_current_now(chip);
@@ -1434,6 +1545,20 @@ static int smb1360_battery_get_property(struct power_supply *psy,
 	}
 	return 0;
 }
+#endif
+
+
+/* [PLATFORM]-Add-BEGIN by TCTNB.WJ, Port from PR-888729, 2015/02/06, add power off condition */
+#ifdef CONFIG_TCT_8X16_COMMON
+static void low_voltage_detect_work_fn(struct work_struct *work)
+{
+	struct smb1360_chip *chip = container_of(work, struct smb1360_chip,
+							low_voltage_detect_work.work);
+
+	power_supply_changed(&chip->batt_psy);
+}
+#endif
+/* [PLATFORM]-Add-END by TCTNB.WJ */
 
 static void smb1360_external_power_changed(struct power_supply *psy)
 {
@@ -1484,6 +1609,10 @@ static int hot_hard_handler(struct smb1360_chip *chip, u8 rt_stat)
 {
 	pr_debug("rt_stat = 0x%02x\n", rt_stat);
 	chip->batt_hot = !!rt_stat;
+
+	if(autotest)
+		printk(" TCTNB_HOT_HARD: %d \n", chip->batt_hot);
+
 	return 0;
 }
 
@@ -1491,6 +1620,10 @@ static int cold_hard_handler(struct smb1360_chip *chip, u8 rt_stat)
 {
 	pr_debug("rt_stat = 0x%02x\n", rt_stat);
 	chip->batt_cold = !!rt_stat;
+
+	if(autotest)
+		printk(" TCTNB_COLD_HARD: %d \n", chip->batt_cold);
+
 	return 0;
 }
 
@@ -1511,6 +1644,7 @@ static void smb1360_jeita_work_fn(struct work_struct *work)
 	temp = smb1360_get_prop_batt_temp(chip);
 
 	if (temp > chip->hot_bat_decidegc) {
+
 		/* battery status is hot, only config thresholds */
 		rc = smb1360_set_soft_jeita_threshold(chip,
 			chip->warm_bat_decidegc, chip->hot_bat_decidegc);
@@ -1518,11 +1652,14 @@ static void smb1360_jeita_work_fn(struct work_struct *work)
 			dev_err(chip->dev, "Couldn't set jeita threshold\n");
 			goto end;
 		}
-	} else if (temp > chip->warm_bat_decidegc ||
+	}
+	else if (temp > chip->warm_bat_decidegc ||
 		(temp == chip->warm_bat_decidegc && !!chip->soft_hot_rt_stat)) {
+
 		/* battery status is warm, do compensation manually */
 		chip->batt_warm = true;
 		chip->batt_cool = false;
+
 		rc = smb1360_float_voltage_set(chip, chip->warm_bat_mv);
 		if (rc) {
 			dev_err(chip->dev, "Couldn't set float voltage\n");
@@ -1531,17 +1668,21 @@ static void smb1360_jeita_work_fn(struct work_struct *work)
 		rc = smb1360_set_appropriate_usb_current(chip);
 		if (rc)
 			pr_err("Couldn't set USB current\n");
+
 		rc = smb1360_set_soft_jeita_threshold(chip,
 			chip->warm_bat_decidegc, chip->hot_bat_decidegc);
 		if (rc) {
 			dev_err(chip->dev, "Couldn't set jeita threshold\n");
 			goto end;
 		}
-	} else if (temp > chip->cool_bat_decidegc ||
-		(temp == chip->cool_bat_decidegc && !chip->soft_cold_rt_stat)) {
+	}
+	else if (temp > chip->cool_bat_decidegc ||
+		(temp == chip->cool_bat_decidegc && !chip->soft_cold_rt_stat))
+	{
 		/* battery status is good, do the normal charging */
 		chip->batt_warm = false;
 		chip->batt_cool = false;
+
 		rc = smb1360_float_voltage_set(chip, chip->vfloat_mv);
 		if (rc) {
 			dev_err(chip->dev, "Couldn't set float voltage\n");
@@ -1550,16 +1691,20 @@ static void smb1360_jeita_work_fn(struct work_struct *work)
 		rc = smb1360_set_appropriate_usb_current(chip);
 		if (rc)
 			pr_err("Couldn't set USB current\n");
+
 		rc = smb1360_set_soft_jeita_threshold(chip,
 			chip->cool_bat_decidegc, chip->warm_bat_decidegc);
 		if (rc) {
 			dev_err(chip->dev, "Couldn't set jeita threshold\n");
 			goto end;
 		}
-	} else if (temp > chip->cold_bat_decidegc) {
+	}
+	else if (temp > chip->cold_bat_decidegc)
+	{
 		/* battery status is cool, do compensation manually */
 		chip->batt_cool = true;
 		chip->batt_warm = false;
+
 		rc = smb1360_float_voltage_set(chip, chip->cool_bat_mv);
 		if (rc) {
 			dev_err(chip->dev, "Couldn't set float voltage\n");
@@ -1571,7 +1716,8 @@ static void smb1360_jeita_work_fn(struct work_struct *work)
 			dev_err(chip->dev, "Couldn't set jeita threshold\n");
 			goto end;
 		}
-	} else {
+	}
+	else {
 		/* battery status is cold, only config thresholds */
 		rc = smb1360_set_soft_jeita_threshold(chip,
 			chip->cold_bat_decidegc, chip->cool_bat_decidegc);
@@ -1582,12 +1728,14 @@ static void smb1360_jeita_work_fn(struct work_struct *work)
 	}
 
 	pr_debug("warm %d, cool %d, soft_cold_rt_sts %d, soft_hot_rt_sts %d, jeita supported %d, threshold_now %d %d\n",
-		chip->batt_warm, chip->batt_cool, !!chip->soft_cold_rt_stat,
-		!!chip->soft_hot_rt_stat, chip->soft_jeita_supported,
-		chip->soft_cold_thresh, chip->soft_hot_thresh);
+			chip->batt_warm, chip->batt_cool, !!chip->soft_cold_rt_stat,
+			!!chip->soft_hot_rt_stat, chip->soft_jeita_supported,
+			chip->soft_cold_thresh, chip->soft_hot_thresh);
+
 end:
 	pm_relax(chip->dev);
 }
+
 
 static int hot_soft_handler(struct smb1360_chip *chip, u8 rt_stat)
 {
@@ -1644,7 +1792,14 @@ static int chg_hot_handler(struct smb1360_chip *chip, u8 rt_stat)
 static int chg_term_handler(struct smb1360_chip *chip, u8 rt_stat)
 {
 	pr_debug("rt_stat = 0x%02x\n", rt_stat);
+
 	chip->batt_full = !!rt_stat;
+
+	if (chip->batt_full && autotest )
+	{
+		printk("TCTNB_FULL Battery FULL\n");
+	}
+
 	return 0;
 }
 
@@ -1661,6 +1816,10 @@ static int usbin_uv_handler(struct smb1360_chip *chip, u8 rt_stat)
 
 	pr_debug("chip->usb_present = %d usb_present = %d\n",
 				chip->usb_present, usb_present);
+
+	if(autotest)
+		printk(" TCTNB_USB_PRESENT: %d \n", usb_present);
+
 	if (chip->usb_present && !usb_present) {
 		/* USB removed */
 		chip->usb_present = usb_present;
@@ -1726,7 +1885,9 @@ static int empty_soc_handler(struct smb1360_chip *chip, u8 rt_stat)
 static int full_soc_handler(struct smb1360_chip *chip, u8 rt_stat)
 {
 	if (rt_stat)
-		pr_debug("SOC is 100\n");
+	{
+		pr_debug("SOC full! rt_stat = 0x%02x\n", rt_stat);
+	}
 
 	return 0;
 }
@@ -2139,7 +2300,12 @@ static irqreturn_t smb1360_stat_handler(int irq, void *dev_id)
 	chip->irq_waiting = true;
 	if (!chip->resume_completed) {
 		dev_dbg(chip->dev, "IRQ triggered before device-resume\n");
-		disable_irq_nosync(irq);
+		if (!chip->irq_disabled) 
+		{
+			disable_irq_nosync(irq);
+			chip->irq_disabled = true;
+		}
+
 		mutex_unlock(&chip->irq_complete);
 		return IRQ_HANDLED;
 	}
@@ -2174,15 +2340,21 @@ static irqreturn_t smb1360_stat_handler(int irq, void *dev_id)
 				rt_stat ? handlers[i].irq_info[j].high++ :
 						handlers[i].irq_info[j].low++;
 
-			if ((triggered || changed)
-				&& handlers[i].irq_info[j].smb_irq != NULL) {
-				handler_count++;
-				rc = handlers[i].irq_info[j].smb_irq(chip,
-								rt_stat);
-				if (rc < 0)
-					dev_err(chip->dev,
-						"Couldn't handle %d irq for reg 0x%02x rc = %d\n",
-						j, handlers[i].stat_reg, rc);
+			if (triggered || changed)
+			{
+				if(handlers[i].irq_info[j].smb_irq != NULL)
+				{
+					handler_count++;
+
+					rc = handlers[i].irq_info[j].smb_irq(chip, rt_stat);
+					if (rc < 0)
+						dev_err(chip->dev,
+							"Couldn't handle %d irq for reg 0x%02x rc = %d\n",
+							j, handlers[i].stat_reg, rc);
+				}
+				else
+					pr_debug("%s(): handlers[%s] not handled by sw \n",
+					       __func__, handlers[i].irq_info[j].name);
 			}
 		}
 		handlers[i].prev_val = handlers[i].val;
@@ -2796,13 +2968,18 @@ static int smb1360_check_batt_profile(struct smb1360_chip *chip)
 				(div_u64(chip->connected_rid, 10)))
 			break;
 	}
+/* [PLATFORM]-MOD-BEGIN by TCTNB.WJ, 2015/04/17, add macro to diff with M823C and force Profile B */
+#ifdef CONFIG_TCT_8X16_IDOL3
+		i = BATTERY_PROFILE_B;
+#endif
+/* [PLATFORM]-MOD-END by TCTNB.WJ */
 
 	if (i == BATTERY_PROFILE_MAX) {
 		pr_err("None of the battery-profiles match the connected-RID\n");
 		return 0;
 	} else {
 		if (i == loaded_profile) {
-			pr_debug("Loaded Profile-RID == connected-RID\n");
+			pr_debug("Loaded Profile-RID == connected-RID = %d \n", i);
 			return 0;
 		} else {
 			new_profile = (loaded_profile == BATTERY_PROFILE_A) ?
@@ -3042,7 +3219,11 @@ disable_fg_reset:
 	 */
 	if (!(chip->workaround_flags & WRKRND_FG_CONFIG_FAIL)) {
 		if (chip->delta_soc != -EINVAL) {
-			reg = abs(((chip->delta_soc * MAX_8_BITS) / 100) - 1);
+/* [PLATFORM]-MOD-BEGIN by TCTNB.WJ, PR-881472, 2015/01/31, port from qcom method */
+			//reg = DIV_ROUND_UP(chip->delta_soc * MAX_8_BITS, 100);
+                        reg = abs(((chip->delta_soc * MAX_8_BITS) / 100) - 1);
+/* [PLATFORM]-MOD-END by TCTNB.WJ, PR-881472, 2015/01/31*/
+
 			pr_debug("delta_soc=%d reg=%x\n", chip->delta_soc, reg);
 			rc = smb1360_write(chip, SOC_DELTA_REG, reg);
 			if (rc) {
@@ -3135,8 +3316,10 @@ disable_fg_reset:
 			}
 			fcc_mah = (reg2[1] << 8) | reg2[0];
 			if (fcc_mah == chip->batt_capacity_mah) {
-				pr_debug("battery capacity correct\n");
+				pr_debug("battery capacity correct as:%d \n", fcc_mah);
 			} else {
+			    pr_debug("read default battery capacity as:%d \n", fcc_mah);
+				
 				/* Update the battery capacity */
 				reg2[1] =
 					(chip->batt_capacity_mah & 0xFF00) >> 8;
@@ -3527,6 +3710,7 @@ static int smb1360_hw_init(struct smb1360_chip *chip)
 				return rc;
 			}
 
+            /* Enable the battery termination current feature */
 			rc = smb1360_masked_write(chip, CFG_CHG_MISC_REG,
 					CHG_CURR_TERM_DIS_BIT, 0);
 			if (rc) {
@@ -3613,7 +3797,13 @@ static int smb1360_hw_init(struct smb1360_chip *chip)
 
 	/* battery missing detection */
 	rc = smb1360_masked_write(chip, CFG_BATT_MISSING_REG,
+/* [PLATFORM]-Mod-BEGIN by TCTNB.FLF, PR-790435, 2014/11/12, fix irq blocks booting up*/
+#ifdef CONFIG_TCT_8X16_IDOL3
+				BATT_MISSING_SRC_THERM_BIT | BATT_MISSING_SRC_BMD_BIT,
+#else
 				BATT_MISSING_SRC_THERM_BIT,
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.FLF */
 				BATT_MISSING_SRC_THERM_BIT);
 	if (rc < 0) {
 		dev_err(chip->dev, "Couldn't set batt_missing config = %d\n",
@@ -3630,7 +3820,11 @@ static int smb1360_hw_init(struct smb1360_chip *chip)
 	/* interrupt enabling - active low */
 	if (chip->client->irq) {
 		mask = CHG_STAT_IRQ_ONLY_BIT
+/* [PLATFORM]-Mod-BEGIN by TCTNB.YuBin, PR-860661, 2014/12/18, change irq mode*/
+#ifndef CONFIG_TCT_8X16_IDOL3
 			| CHG_STAT_ACTIVE_HIGH_BIT
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.YuBin */
 			| CHG_STAT_DISABLE_BIT
 			| CHG_TEMP_CHG_ERR_BLINK_BIT;
 
@@ -3638,6 +3832,7 @@ static int smb1360_hw_init(struct smb1360_chip *chip)
 			reg = CHG_STAT_IRQ_ONLY_BIT;
 		else
 			reg = CHG_TEMP_CHG_ERR_BLINK_BIT;
+
 		rc = smb1360_masked_write(chip, CFG_STAT_CTRL_REG, mask, reg);
 		if (rc < 0) {
 			dev_err(chip->dev, "Couldn't set irq config rc = %d\n",
@@ -3904,6 +4099,8 @@ static int smb_parse_dt(struct smb1360_chip *chip)
 
 	chip->rsense_10mohm = of_property_read_bool(node, "qcom,rsense-10mhom");
 
+    chip->charging_disabled = of_property_read_bool(node, "qcom,charging-disabled");
+
 	if (of_property_read_bool(node, "qcom,batt-profile-select")) {
 		rc = smb_parse_batt_id(chip);
 		if (rc < 0) {
@@ -3961,9 +4158,6 @@ static int smb_parse_dt(struct smb1360_chip *chip)
 
 	chip->chg_inhibit_disabled = of_property_read_bool(node,
 						"qcom,chg-inhibit-disabled");
-
-	chip->charging_disabled = of_property_read_bool(node,
-						"qcom,charging-disabled");
 
 	chip->batt_id_disabled = of_property_read_bool(node,
 						"qcom,batt-id-disabled");
@@ -4114,6 +4308,12 @@ static int smb1360_probe(struct i2c_client *client,
 	chip->fake_battery_soc = -EINVAL;
 	mutex_init(&chip->read_write_lock);
 	INIT_DELAYED_WORK(&chip->jeita_work, smb1360_jeita_work_fn);
+
+/* [PLATFORM]-Add-BEGIN by TCTNB.WJ, Port from PR-888729, 2015/02/06, add power off condition */
+#ifdef CONFIG_TCT_8X16_COMMON
+	INIT_DELAYED_WORK(&chip->low_voltage_detect_work, low_voltage_detect_work_fn);
+#endif
+/* [PLATFORM]-Add-END by TCTNB.WJ */
 
 	/* probe the device to check if its actually connected */
 	rc = smb1360_read(chip, CFG_BATT_CHG_REG, &reg);
@@ -4329,6 +4529,11 @@ static int smb1360_remove(struct i2c_client *client)
 {
 	struct smb1360_chip *chip = i2c_get_clientdata(client);
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.WJ, Port from PR-888729, 2015/02/06, add power off condition */
+#ifdef CONFIG_TCT_8X16_COMMON
+	cancel_delayed_work(&chip->low_voltage_detect_work);
+#endif
+/* [PLATFORM]-Add-END by TCTNB.WJ */
 	regulator_unregister(chip->otg_vreg.rdev);
 	power_supply_unregister(&chip->batt_psy);
 	mutex_destroy(&chip->charging_disable_lock);
@@ -4368,6 +4573,11 @@ static int smb1360_suspend(struct device *dev)
 		pr_err("Couldn't set irq2_cfg rc=%d\n", rc);
 
 	rc = smb1360_write(chip, IRQ3_CFG_REG, IRQ3_SOC_FULL_BIT
+/* [PLATFORM]-Add-BEGIN by TCTNB.WJ, PR-881472, 2015/1/16, display soc error */
+#ifdef CONFIG_TCT_8X16_IDOL3
+                    | IRQ3_SOC_CHANGE_BIT
+#endif
+/* [PLATFORM]-Add-END by TCTNB.WJ */
 					| IRQ3_SOC_MIN_BIT
 					| IRQ3_SOC_EMPTY_BIT);
 	if (rc < 0)
@@ -4408,10 +4618,12 @@ static int smb1360_resume(struct device *dev)
 
 	mutex_lock(&chip->irq_complete);
 	chip->resume_completed = true;
-	if (chip->irq_waiting) {
+    if (chip->irq_waiting && chip->irq_disabled)
+	{
+		chip->irq_disabled = false;
+		enable_irq(client->irq);
 		mutex_unlock(&chip->irq_complete);
 		smb1360_stat_handler(client->irq, chip);
-		enable_irq(client->irq);
 	} else {
 		mutex_unlock(&chip->irq_complete);
 	}

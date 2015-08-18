@@ -1617,6 +1617,47 @@ static int ft5x06_parse_dt(struct device *dev,
 }
 #endif
 
+static ssize_t ft5x06_virtual_keys_register(struct kobject *kobj,
+			     struct kobj_attribute *attr,
+			     char *buf)
+{
+	printk(KERN_ERR "%s: 444\n", __func__);
+	return snprintf(buf, 200,
+	__stringify(EV_KEY) ":" __stringify(KEY_MENU)  ":600:1350:100:120"
+	":" __stringify(EV_KEY) ":" __stringify(KEY_HOME)   ":360:1350:100:120"
+	":" __stringify(EV_KEY) ":" __stringify(KEY_BACK)   ":120:1350:100:120"
+	"\n");
+}
+static struct kobj_attribute ft5x06_virtual_keys_attr = {
+	.attr = {
+		.name = "virtualkeys.ft5x06_ts",
+		.mode = S_IRUGO,
+	},
+	.show = &ft5x06_virtual_keys_register,
+};
+
+static struct attribute *ft5x06_virtual_key_properties_attrs[] = {
+	&ft5x06_virtual_keys_attr.attr,
+	NULL,
+};
+
+static struct attribute_group ft5x06_virtual_key_properties_attr_group = {
+	.attrs = ft5x06_virtual_key_properties_attrs,
+};
+static void __init ft5x06_init_vkeys_8x26(void)
+{
+	int rc = 0;
+	static struct kobject *ft5x06_virtual_key_properties_kobj;
+	ft5x06_virtual_key_properties_kobj =
+	kobject_create_and_add("board_properties", NULL);
+	if (ft5x06_virtual_key_properties_kobj)
+		rc = sysfs_create_group(ft5x06_virtual_key_properties_kobj,
+			&ft5x06_virtual_key_properties_attr_group);
+		if (!ft5x06_virtual_key_properties_kobj || rc)
+		pr_err("%s: failed to create board_properties\n", __func__);
+	}
+/////////////////////////
+/*[BUGFIX]-END by TCTNB.XQJ*/
 static int ft5x06_ts_probe(struct i2c_client *client,
 			   const struct i2c_device_id *id)
 {
@@ -1895,6 +1936,7 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 	data->early_suspend.resume = ft5x06_ts_late_resume;
 	register_early_suspend(&data->early_suspend);
 #endif
+    ft5x06_init_vkeys_8x26();/*#[BUGFIX]-ADD by TCTNB.XQJ,09/29/2013,FR-523019,add VK setting for vk.*/
 
 	return 0;
 

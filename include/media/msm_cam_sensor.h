@@ -592,6 +592,26 @@ struct sensor_init_cfg_data {
 	} cfg;
 };
 
+/*
+FotoNation begin
+*/
+#define CAM_MODULE_ID_IDOL347_SOURCE1		101
+#define CAM_MODULE_ID_IDOL347_SOURCE2		102
+#define CAM_MODULE_ID_IDOL355_SOURCE3		103
+
+struct sensor_ff_otp_data {
+	uint32_t	cam_module_id;
+	uint16_t	infinity_dac;
+	uint16_t	macro_dac;
+	uint16_t	infinity_dac_phys;
+	uint16_t	macro_dac_phys;
+	uint16_t	infinity_dac_af;
+	uint16_t	macro_dac_af;
+};
+/*
+FotoNation end
+*/
+
 #define VIDIOC_MSM_SENSOR_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 1, struct sensorb_cfg_data)
 
@@ -625,9 +645,29 @@ struct sensor_init_cfg_data {
 #define VIDIOC_MSM_OIS_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 11, struct msm_ois_cfg_data)
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.qijiang.yu, 2014/05/06, OTP dev*/
+#define VIDIOC_MSM_SENSOR_GET_OTP_STATUS \
+        _IOWR('V', BASE_VIDIOC_PRIVATE + 12, uint32_t)
+/* [PLATFORM]-Add-END by TCTNB.qijiang.yu*/
 #define VIDIOC_MSM_FLASH_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 13, struct msm_flash_cfg_data_t)
 
+/*
+FotoNation begin
+*/
+#define VIDIOC_MSM_SENSOR_GET_FF_OTP \
+    _IOR('V', BASE_VIDIOC_PRIVATE + 14, struct sensor_ff_otp_data)
+
+#define VIDIOC_MSM_SENSOR_TEMPERATURE \
+    _IOWR('V', BASE_VIDIOC_PRIVATE + 15, uint32_t)        
+/*
+FotoNation end
+*/
+
+//wenyuan.li@tcl 20150228 bug936683 get framelength from kernel +
+#define VIDIOC_MSM_SENSOR_FRAMELENGTH \
+    _IOWR('V', BASE_VIDIOC_PRIVATE + 16, uint32_t)     
+//wenyuan.li@tcl 20150228 bug936683 get framelength from kernel -
 #ifdef CONFIG_COMPAT
 struct msm_camera_i2c_reg_setting32 {
 	compat_uptr_t reg_setting;

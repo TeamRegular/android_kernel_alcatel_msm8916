@@ -44,6 +44,76 @@
    and provided to the battery driver in the units desired for
    their framework which is 0.1DegC. True resolution of 0.1DegC
    will result in the below table size to increase by 10 times */
+
+/* [PLATFORM]-Mod-BEGIN by TCTNB.FLF, PR-833642, 2014/11/10, adjust thermal adc according to HW */
+#ifdef CONFIG_TCT_8X16_ALTO45_LATAM_B28
+static const struct qpnp_vadc_map_pt adcmap_btm_threshold[] = {
+	{-300,    1642},
+    {-200,    1544},
+    {-100,    1414},
+    {0,    1260},
+    {10,    1244},
+    {20,    1228},
+    {30,    1212},
+    {40,    1195},
+    {50,    1179},
+    {60,    1162},
+    {70,    1146},
+    {80,    1129},
+    {90,    1113},
+    {100,    1097},
+    {110,    1080},
+    {120,    1064},
+    {130,    1048},
+    {140,    1032},
+    {150,    1016},
+    {160,    1000},
+    {170,    985},
+    {180,    969},
+    {190,    954},
+    {200,    939},
+    {210,    924},
+    {220,    909},
+    {230,    894},
+    {240,    880},
+    {250,    866},
+    {260,    852},
+    {270,    838},
+    {280,    824},
+    {290,    811},
+    {300,    798},
+    {310,    785},
+    {320,    771},
+    {330,    758},
+    {340,    745},
+    {350,    732},
+    {360,    718},
+    {370,    705},
+    {380,    692},
+    {390,    678},
+    {400,    665},
+    {410,    648},
+    {420,    632},
+    {430,    615},
+    {440,    599},
+    {450,    582},
+    {460,    573},
+    {470,    564},
+    {480,    554},
+    {490,    545},
+    {500,    536},
+    {510,    526},
+    {520,    516},
+    {530,    506},
+    {540,    496},
+    {550,    486},
+    {560,    474},
+    {570,    462},
+    {580,    451},
+    {590,    439},
+    {600,    428},
+};
+#else
 static const struct qpnp_vadc_map_pt adcmap_btm_threshold[] = {
 	{-300,	1642},
 	{-200,	1544},
@@ -129,6 +199,8 @@ static const struct qpnp_vadc_map_pt adcmap_btm_threshold[] = {
 	{780,	208},
 	{790,	203}
 };
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.FLF */
 
 static const struct qpnp_vadc_map_pt adcmap_qrd_btm_threshold[] = {
 	{-200,	1540},

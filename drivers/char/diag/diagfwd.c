@@ -40,6 +40,7 @@
 #include "diag_usb.h"
 #include "diag_mux.h"
 
+
 #define STM_CMD_VERSION_OFFSET	4
 #define STM_CMD_MASK_OFFSET	5
 #define STM_CMD_DATA_OFFSET	6
@@ -1528,7 +1529,8 @@ static int diagfwd_mux_write_done(unsigned char *buf, int len, int buf_ctxt,
 			 * channels. This will ensure that the next read is not
 			 * missed.
 			 */
-			if (driver->logging_mode == MEMORY_DEVICE_MODE) {
+			if (driver->logging_mode == MEMORY_DEVICE_MODE &&
+					ctxt == DIAG_MEMORY_DEVICE_MODE) {
 				flush_workqueue(smd_info->wq);
 				wake_up(&driver->smd_wait_q);
 			}

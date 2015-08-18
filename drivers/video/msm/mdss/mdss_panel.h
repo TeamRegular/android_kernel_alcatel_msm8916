@@ -393,6 +393,9 @@ struct mdss_panel_info {
 	u32 max_fps;
 
 	u32 cont_splash_enabled;
+#ifdef CONFIG_TCT_8X16_IDOL347
+        bool esd_rdy;
+#endif
 	u32 partial_update_enabled;
 	u32 dcs_cmd_by_left;
 	u32 partial_update_roi_merge;

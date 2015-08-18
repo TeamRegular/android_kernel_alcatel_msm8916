@@ -1207,7 +1207,9 @@ static int mdss_fb_unblank_sub(struct msm_fb_data_type *mfd)
 		mutex_lock(&mfd->bl_lock);
 		if (!mfd->bl_updated) {
 			mfd->bl_updated = 1;
+#ifndef CONFIG_TCT_8X16_IDOL347
 			mdss_fb_set_backlight(mfd, mfd->unset_bl_level);
+#endif
 		}
 		mutex_unlock(&mfd->bl_lock);
 	}
@@ -1295,7 +1297,9 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 				/* Stop Display thread */
 				if (mfd->disp_thread)
 					mdss_fb_stop_disp_thread(mfd);
+#ifndef CONFIG_TCT_8X16_IDOL347
 				mdss_fb_set_backlight(mfd, 0);
+#endif
 				mfd->bl_updated = 0;
 			}
 			mfd->panel_power_state = req_power_state;

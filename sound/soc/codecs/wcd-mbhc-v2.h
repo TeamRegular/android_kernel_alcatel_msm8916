@@ -19,6 +19,12 @@
 #define TOMBAK_MBHC_NO	1
 #define WCD_MBHC_DEF_BUTTONS 5
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2014/12/15, BUG 869558, for temp solution */
+#ifdef CONFIG_TCT_8X16_IDOL3
+#define TEMP_SOLUTION_ENABLE 0
+#endif
+/* [PLATFORM]-Add-END by TCTNB.HJ, 2014/12/15*/
+
 enum wcd_mbhc_plug_type {
 	MBHC_PLUG_TYPE_INVALID = -1,
 	MBHC_PLUG_TYPE_NONE,

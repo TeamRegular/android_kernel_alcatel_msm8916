@@ -108,6 +108,12 @@ enum {
 #define VOLTAGE_CONVERTER(value, min_value, step_size)\
 	((value - min_value)/step_size);
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
+#if defined(CONFIG_TCT_8X16_IDOL3)|| defined(CONFIG_TCT_8X16_IDOL347)
+uint8_t headset_enable_27;
+#endif
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
+
 enum {
 	AIF1_PB = 0,
 	AIF1_CAP,
@@ -1589,6 +1595,42 @@ static int msm8x16_wcd_put_iir_band_audio_mixer(
 	return 0;
 }
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
+static int get_micbias_27(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value  *ucontrol)
+{
+    pr_debug("hujin get ---[%d]\n", ucontrol->value.enumerated.item[0]);
+
+    return 0;
+}
+
+static int set_micbias_27(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value  *ucontrol)
+{
+    pr_debug("hujin set ---[%d]\n", ucontrol->value.enumerated.item[0]);
+       switch(ucontrol->value.enumerated.item[0]){
+               case 1:
+            pr_debug("hujin enable 27\n");
+            headset_enable_27 = 1;
+            break;
+               case 0:
+            pr_debug("hujin disable 27\n");
+            headset_enable_27 = 0;
+            break;
+               default:
+            pr_debug("hujin default error\n");
+            break;
+    };
+       return 0;
+}
+
+static const char * const tct_micbias_27_text[] = {
+               "OFF", "ON"};
+static const struct soc_enum tct_micbias_27_enum[] = {
+               SOC_ENUM_SINGLE_EXT(2, tct_micbias_27_text),
+};
+#endif
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
+
 static const char * const msm8x16_wcd_loopback_mode_ctrl_text[] = {
 		"DISABLE", "ENABLE"};
 static const struct soc_enum msm8x16_wcd_loopback_mode_ctl_enum[] = {
@@ -1788,7 +1830,11 @@ static const struct snd_kcontrol_new msm8x16_wcd_snd_controls[] = {
 	SOC_SINGLE_MULTI_EXT("IIR2 Band5", IIR2, BAND5, 255, 0, 5,
 	msm8x16_wcd_get_iir_band_audio_mixer,
 	msm8x16_wcd_put_iir_band_audio_mixer),
-
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
+	SOC_ENUM_EXT("TCT MICBIAS 27", tct_micbias_27_enum[0], get_micbias_27, set_micbias_27),
+#endif
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
 };
 
 static int tombak_hph_impedance_get(struct snd_kcontrol *kcontrol,
@@ -4199,9 +4245,15 @@ static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 		return ret;
 	}
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2014/11/19, headset det*/
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
+	wcd_mbhc_init(&msm8x16_wcd_priv->mbhc, codec, &mbhc_cb, &intr_ids,
+			false);
+#else
 	wcd_mbhc_init(&msm8x16_wcd_priv->mbhc, codec, &mbhc_cb, &intr_ids,
 			true);
-
+#endif
+/* [PLATFORM]-Add-END by TCTNB.HJ*/
 	msm8x16_wcd_priv->mclk_enabled = false;
 	msm8x16_wcd_priv->clock_active = false;
 	msm8x16_wcd_priv->config_mode_active = false;

@@ -385,6 +385,14 @@ KBUILD_AFLAGS_MODULE  := -DMODULE
 KBUILD_CFLAGS_MODULE  := -DMODULE
 KBUILD_LDFLAGS_MODULE := -T $(srctree)/scripts/module-common.lds
 
+ifeq ($(TARGET_BUILD_MMITEST), true)
+KBUILD_CFLAGS += -DFEATURE_TCTNB_MMITEST
+endif
+
+ifeq ($(TARGET_BUILD_MMITEST), true)
+KBUILD_CFLAGS += -DMINI_MODE_TO_CTP
+endif
+
 # Read KERNELRELEASE from include/config/kernel.release (if it exists)
 KERNELRELEASE = $(shell cat include/config/kernel.release 2> /dev/null)
 KERNELVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
@@ -591,6 +599,16 @@ KBUILD_CFLAGS += $(call cc-option,-fno-reorder-blocks,) \
                  $(call cc-option,-fno-ipa-cp-clone,) \
                  $(call cc-option,-fno-partial-inlining)
 endif
+
+# Architecture-Add-Begin
+# ArchiNO:(002.product_operator_macro)
+KBUILD_CFLAGS += -DTARGET_PRODUCT=\"$(TARGET_PRODUCT)\"
+KBUILD_CFLAGS += -DTARGET_OPERATOR=\"$(TARGET_OPERATOR)\"
+KBUILD_CFLAGS += -DTARGET_PRODUCT_$(shell echo "$(TARGET_PRODUCT)" | tr '[a-z]' '[A-Z]')
+KBUILD_CFLAGS += -DTARGET_OPERATOR_$(shell echo "$(TARGET_OPERATOR)" | tr '[a-z]' '[A-Z]')
+# ArchiNO:(007.tct_feature)
+-include $(srctree)/../out/target/product/$(TARGET_PRODUCT)/tct_intermediates/feature/global_kernel.mk
+# Architecture-Add-End
 
 ifneq ($(CONFIG_FRAME_WARN),0)
 KBUILD_CFLAGS += $(call cc-option,-Wframe-larger-than=${CONFIG_FRAME_WARN})

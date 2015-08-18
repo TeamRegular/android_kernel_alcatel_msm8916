@@ -2348,6 +2348,18 @@ config ARTHUR
 	  You can also say M here to compile this support as a module (which
 	  will be called arthur).
 
+config TCT_8X16_COMMON
+	depends on ARCH_MSM8916
+	bool "MSM8916 TCT COMMON"
+	help
+	  Support for the TCT COMMON device.
+
+config TCT_8X16_IDOL347
+	depends on ARCH_MSM8916
+	bool "MSM8916 IDOL347"
+	help
+	  Support for the TCT IDOL347 device.
+
 endmenu
 
 menu "Power management options"

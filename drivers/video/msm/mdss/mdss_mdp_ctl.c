@@ -979,6 +979,20 @@ int mdss_mdp_perf_bw_check_pipe(struct mdss_mdp_perf_params *perf,
 	return 0;
 }
 
+#ifdef CONFIG_TCT_8X16_IDOL347
+static unsigned int charger_mode = 0;
+static int __init charger_enable(char *str)
+{
+	if (strcmp("charger", str) == 0) {
+		charger_mode = 1;
+	}
+
+	printk("rayz: charger=%d\n", charger_mode);
+	return 0;
+}
+__setup("androidboot.mode=", charger_enable);
+#endif
+
 static void mdss_mdp_perf_calc_ctl(struct mdss_mdp_ctl *ctl,
 		struct mdss_mdp_perf_params *perf)
 {
@@ -1002,6 +1016,15 @@ static void mdss_mdp_perf_calc_ctl(struct mdss_mdp_ctl *ctl,
 
 	__mdss_mdp_perf_calc_ctl_helper(ctl, perf,
 		left_plist, left_cnt, right_plist, right_cnt, 0);
+
+#ifdef CONFIG_TCT_8X16_IDOL347
+	if (charger_mode) {
+		printk("charger mode\n");
+		/* override orginal ib facor in case of charger */
+		mdss_res->ib_factor_overlap.numer = 3;
+		mdss_res->ib_factor_overlap.denom = 1;
+	}
+#endif
 
 	if (ctl->is_video_mode) {
 		perf->bw_ctl =

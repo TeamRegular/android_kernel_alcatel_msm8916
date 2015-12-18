@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -960,24 +960,34 @@ static void kgsl_process_private_close(struct kgsl_device_private *dev_priv,
 {
 	mutex_lock(&kgsl_driver.process_mutex);
 
+	if (--private->fd_count > 0) {
+		mutex_unlock(&kgsl_driver.process_mutex);
+		kgsl_process_private_put(private);
+		return;
+	}
+
 	/*
 	 * If this is the last file on the process take down the debug
 	 * directories and garbage collect any outstanding resources
 	 */
 
-	if (--private->fd_count == 0) {
-		kgsl_process_uninit_sysfs(private);
-		debugfs_remove_recursive(private->debug_root);
+	kgsl_process_uninit_sysfs(private);
+	debugfs_remove_recursive(private->debug_root);
 
-		process_release_memory(dev_priv, private);
-		process_release_sync_sources(private);
+	process_release_sync_sources(private);
 
-		/* Remove the process struct from the master list */
-		list_del(&private->list);
-	}
+	/* Remove the process struct from the master list */
+	list_del(&private->list);
+
+	/*
+	 * Unlock the mutex before releasing the memory - this prevents a
+	 * deadlock with the IOMMU mutex if a page fault occurs
+	 */
+	mutex_unlock(&kgsl_driver.process_mutex);
+
+	process_release_memory(dev_priv, private);
 
 	kgsl_process_private_put(private);
-	mutex_unlock(&kgsl_driver.process_mutex);
 }
 
 
@@ -1035,8 +1045,7 @@ static int kgsl_close_device(struct kgsl_device *device)
 		/* Fail if the wait times out */
 		BUG_ON(atomic_read(&device->active_cnt) > 0);
 
-		result = device->ftbl->stop(device);
-		kgsl_pwrctrl_change_state(device, KGSL_STATE_INIT);
+		result = kgsl_pwrctrl_change_state(device, KGSL_STATE_INIT);
 	}
 	mutex_unlock(&device->mutex);
 	return result;
@@ -1127,8 +1136,10 @@ static int kgsl_open_device(struct kgsl_device *device)
 	}
 	device->open_count++;
 err:
-	if (result)
+	if (result) {
+		kgsl_pwrctrl_change_state(device, KGSL_STATE_INIT);
 		atomic_dec(&device->active_cnt);
+	}
 
 	mutex_unlock(&device->mutex);
 	return result;
@@ -1567,48 +1578,26 @@ static void _kgsl_cmdbatch_timer(unsigned long data)
 	if (cmdbatch == NULL || cmdbatch->context == NULL)
 		return;
 
-	/* We are in timer context, this can be non-bh */
-	spin_lock(&cmdbatch->lock);
-	if (list_empty(&cmdbatch->synclist))
-		goto done;
-
 	device = cmdbatch->context->device;
 
 	dev_err(device->dev,
 		"kgsl: possible gpu syncpoint deadlock for context %d timestamp %d\n",
 		cmdbatch->context->id, cmdbatch->timestamp);
-	dev_err(device->dev, " Active sync points:\n");
 
-	/* Print all the pending sync objects */
+	set_bit(CMDBATCH_FLAG_FENCE_LOG, &cmdbatch->priv);
+	kgsl_context_dump(cmdbatch->context);
+	clear_bit(CMDBATCH_FLAG_FENCE_LOG, &cmdbatch->priv);
+
+	spin_lock(&cmdbatch->lock);
+	/* Print all the fences */
 	list_for_each_entry(event, &cmdbatch->synclist, node) {
-		switch (event->type) {
-		case KGSL_CMD_SYNCPOINT_TYPE_TIMESTAMP: {
-			unsigned int retired;
-
-			kgsl_readtimestamp(event->device,
-				event->context, KGSL_TIMESTAMP_RETIRED,
-					&retired);
-
-			dev_err(device->dev,
-				"  [timestamp] context %d timestamp %d (retired %d)\n",
-				event->context->id, event->timestamp, retired);
-			break;
-		}
-		case KGSL_CMD_SYNCPOINT_TYPE_FENCE:
-			if (event->handle && event->handle->fence) {
-				set_bit(CMDBATCH_FLAG_FENCE_LOG,
-					&cmdbatch->priv);
-				sync_fence_log(event->handle->fence);
-				clear_bit(CMDBATCH_FLAG_FENCE_LOG,
-					&cmdbatch->priv);
-			} else
-				dev_err(device->dev, "  fence: invalid\n");
-			break;
-		}
+			if (KGSL_CMD_SYNCPOINT_TYPE_FENCE == event->type &&
+					event->handle && event->handle->fence)
+					kgsl_sync_fence_log(event->handle->fence);
 	}
-
-done:
 	spin_unlock(&cmdbatch->lock);
+	dev_err(device->dev, "--gpu syncpoint deadlock print end--\n");
+
 }
 
 /**

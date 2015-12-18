@@ -128,6 +128,14 @@ void mdss_check_dsi_ctrl_status(struct work_struct *work, uint32_t interval)
         /* Add esd code by ChangShengBao End */
 #endif
 
+	if (!pdata->panel_info.esd_rdy) {
+		pr_warn("%s: unblank not complete, reschedule check status\n",
+			__func__);
+		schedule_delayed_work(&pstatus_data->check_status,
+				msecs_to_jiffies(interval));
+		return;
+	}
+
 	mdp5_data = mfd_to_mdp5_data(pstatus_data->mfd);
 	ctl = mfd_to_ctl(pstatus_data->mfd);
 
@@ -135,15 +143,6 @@ void mdss_check_dsi_ctrl_status(struct work_struct *work, uint32_t interval)
 		pr_err("%s: Display is off\n", __func__);
 		return;
 	}
-
-#ifndef CONFIG_TCT_8X16_IDOL347
-	if (ctl->power_state == MDSS_PANEL_POWER_OFF) {
-		schedule_delayed_work(&pstatus_data->check_status,
-			msecs_to_jiffies(interval));
-		pr_debug("%s: ctl not powered on\n", __func__);
-		return;
-	}
-#endif
 
 	if (ctrl_pdata->status_mode == ESD_TE) {
 		mdss_check_te_status(ctrl_pdata, pstatus_data, interval);

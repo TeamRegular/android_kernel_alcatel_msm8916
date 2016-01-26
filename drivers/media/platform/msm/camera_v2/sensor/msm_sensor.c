@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -771,8 +771,6 @@ static long msm_sensor_subdev_ioctl(struct v4l2_subdev *sd,
 	case MSM_SD_SHUTDOWN:
 		msm_sensor_stop_stream(s_ctrl);
 		return 0;
-	case MSM_SD_NOTIFY_FREEZE:
-		return 0;
 	case VIDIOC_MSM_SENSOR_GET_OTP_STATUS:
 #if	TCT_SENSOR_OTP_OPEN
 		printk("%s cmd =%d \n",__func__,cmd);
@@ -1011,7 +1009,6 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 		conf_array.delay = conf_array32.delay;
 		conf_array.size = conf_array32.size;
 		conf_array.reg_setting = compat_ptr(conf_array32.reg_setting);
-		conf_array.qup_i2c_batch = conf_array32.qup_i2c_batch;
 
 		if (!conf_array.size) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
@@ -1216,7 +1213,6 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 		stop_setting->data_type = stop_setting32.data_type;
 		stop_setting->delay = stop_setting32.delay;
 		stop_setting->size = stop_setting32.size;
-		stop_setting->qup_i2c_batch = stop_setting32.qup_i2c_batch;
 
 		reg_setting = compat_ptr(stop_setting32.reg_setting);
 

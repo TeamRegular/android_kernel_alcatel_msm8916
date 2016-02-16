@@ -527,6 +527,9 @@ typedef enum
    WLAN_HAL_DISABLE_MONITOR_MODE_RSP        = 305,
    WLAN_HAL_SET_RTS_CTS_HTVHT_IND           = 306,
    WLAN_HAL_LOST_LINK_PARAMETERS_IND        = 312,
+
+   WLAN_HAL_ANTENNA_DIVERSITY_SELECTION_REQ  = 330,
+   WLAN_HAL_ANTENNA_DIVERSITY_SELECTION_RSP  = 331,
    WLAN_HAL_MSG_MAX = WLAN_HAL_MSG_TYPE_MAX_ENUM_SIZE
 }tHalHostMsgType;
 
@@ -6616,6 +6619,7 @@ typedef enum {
     FW_STATS               = 47,
     WPS_PRBRSP_TMPL        = 48,
     BCN_IE_FLT_DELTA       = 49,
+    ANTENNA_DIVERSITY_SELECTION  = 62,
     MAX_FEATURE_SUPPORTED  = 128,
 } placeHolderInCapBitmap;
 
@@ -8364,6 +8368,31 @@ typedef PACKED_PRE struct PACKED_POST
     tHalMsgHeader header;
     tHalLostLinkParametersIndParams lostLinkParameters;
 }tHalLostLinkParametersIndMsg, *tpHalLostLinkParametersIndMsg;
+
+/*---------------------------------------------------------------------------
+* WLAN_HAL_ANTENNA_DIVERSITY_SELECTION_REQ
+*-------------------------------------------------------------------------*/
+typedef PACKED_PRE struct PACKED_POST
+{
+   tANI_U32 reserved;
+} tHalAntennaDiversitySelectionReqParams, *tpHalAntennaDiversitySelectionReqParams;
+
+typedef PACKED_PRE struct PACKED_POST
+{
+   tHalMsgHeader header;
+   tHalAntennaDiversitySelectionReqParams AntDivSelReqParams;
+}tHalAntennaDiversitySelectionReqMsg;
+
+/*---------------------------------------------------------------------------
+* WLAN_HAL_ANTENNA_DIVERSITY_SELECTION_RSP
+*-------------------------------------------------------------------------*/
+
+typedef PACKED_PRE struct PACKED_POST
+{
+   tANI_U16 status;
+   tANI_U32 selectedAntennaId;
+   tANI_U32 reserved;
+} tHalAntennaDiversitySelectionRspParams, *tpHalAntennaDiversitySelectionRspParams;
 
 #if defined(__ANI_COMPILER_PRAGMA_PACK_STACK)
 #pragma pack(pop)

@@ -280,6 +280,7 @@ extern spinlock_t hdd_context_lock;
 #define POWER_CONTEXT_MAGIC 0x504F5752   //POWR
 #define SNR_CONTEXT_MAGIC   0x534E5200   //SNR
 #define BCN_MISS_RATE_CONTEXT_MAGIC 0x513F5753
+#define ANTENNA_CONTEXT_MAGIC 0x414E544E //ANTN
 
 /*
  * Driver miracast parameters 0-Disabled
@@ -1081,6 +1082,9 @@ struct hdd_adapter_s
 
    /* work queue to defer the back to back p2p_listen */
    struct delayed_work roc_work;
+
+   /* Currently used antenna Index*/
+   int antennaIndex;
 };
 
 #define WLAN_HDD_GET_STATION_CTX_PTR(pAdapter) (&(pAdapter)->sessionCtx.station)

@@ -18,6 +18,11 @@
 #include "msm_cci.h"
 #include "msm_eeprom.h"
 
+#include "s5k3m2_eeprom.h"
+/* [PLATFORM]-Add-BEGIN by TCTNB.YJ, for idol3 rear camera OTP */
+#include "s5k3m2_idol3_eeprom.h"
+/* [PLATFORM]-Mod-END by TCTNB.YJ */
+
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
@@ -1042,11 +1047,53 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 		pr_err("failed rc %d\n", rc);
 		goto memdata_free;
 	}
+	 /*[CAMERA]-ADD BEGIN by wenlong.song,2015-12-18,Task-1177157 ,for camera from L*/
+    if (strcmp(e_ctrl->eboard_info->eeprom_name,"s5k3m2_idol347") == 0)
+    {
+        uint16_t chipid = 0;
+        e_ctrl->i2c_client.cci_client->sid = 0x5A >> 1;
+        e_ctrl->i2c_client.addr_type = MSM_CAMERA_I2C_WORD_ADDR;
+
+        rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+            &e_ctrl->i2c_client,0x0000,
+            &chipid, MSM_CAMERA_I2C_WORD_DATA);
+        pr_err("get sensor id,rc = %d,chipid = 0x%x\n",rc,chipid);
+        if (rc < 0) {
+            pr_err("%s: %s: read id failed\n", __func__, e_ctrl->eboard_info->eeprom_name);
+            //return rc;
+            goto power_down;
+        }
+
+        s5k3m2_idol347_read_otp(e_ctrl,31, S5K3M2_IDOL347_OTP_BASE_ADD, e_ctrl->cal_data.mapdata,e_ctrl->cal_data.num_data); 
+    }
+    else
+/* [PLATFORM]-Add-BEGIN by TCTNB.YJ, for idol3 rear camera OTP */
+    if(strcmp(e_ctrl->eboard_info->eeprom_name,"s5k3m2_idol3") == 0)
+    {
+        uint16_t chipid = 0;
+        e_ctrl->i2c_client.cci_client->sid = 0x5A >> 1;
+        e_ctrl->i2c_client.addr_type = MSM_CAMERA_I2C_WORD_ADDR;
+
+        rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+            &e_ctrl->i2c_client,0x0000,
+            &chipid, MSM_CAMERA_I2C_WORD_DATA);
+        pr_err("get sensor id,rc = %d,chipid = 0x%x\n",rc,chipid);
+        if (rc < 0) {
+            pr_err("%s: %s: read id failed\n", __func__, e_ctrl->eboard_info->eeprom_name);
+            goto power_down;
+        }
+
+        s5k3m2_idol3_read_otp(e_ctrl,31, S5K3M2_IDOL3_OTP_BASE_ADD, e_ctrl->cal_data.mapdata,e_ctrl->cal_data.num_data); 
+    }
+    else
+/* [PLATFORM]-Mod-END by TCTNB.YJ */
+    {
 	rc = read_eeprom_memory(e_ctrl, &e_ctrl->cal_data);
 	if (rc < 0) {
 		pr_err("%s read_eeprom_memory failed\n", __func__);
 		goto power_down;
 	}
+    }
 	for (j = 0; j < e_ctrl->cal_data.num_data; j++)
 		CDBG("memory_data[%d] = 0x%X\n", j,
 			e_ctrl->cal_data.mapdata[j]);

@@ -280,7 +280,12 @@ ifeq ($(CONFIG_USE_OF),y)
 KBUILD_DTBS := dtbs
 endif
 
+ifneq ($(CONFIG_TCT_8X16_COMMON),y)
 DTSSUBDIR := qcom
+else
+DTSSUBDIR := $(TARGET_PRODUCT)
+endif
+
 
 all:	$(KBUILD_IMAGE) $(KBUILD_DTBS)
 

@@ -184,6 +184,15 @@ int msm_isp_update_bandwidth(enum msm_isp_hw_client client,
 	}
 	ISP_DBG("%s: Total AB = %llu IB = %llu\n", __func__,
 			path->vectors[0].ab, path->vectors[0].ib);
+	/*All the clients combined i.e. VFE + CPP should use atleast
+	minimum recommended bandwidth*/
+	/*Begin @zhfan PR 982440 Increase ib value to avoid ISP overflow*/
+	#if defined CONFIG_TCT_8X16_IDOL347
+	#else
+	if (path->vectors[0].ib < 6400000000)
+		path->vectors[0].ib = 6400000000;
+	#endif
+	/*End @zhfan PR 982440 Increase ib value to avoid ISP overflow*/
 	msm_bus_scale_client_update_request(isp_bandwidth_mgr.bus_client,
 		isp_bandwidth_mgr.bus_vector_active_idx);
 	/* Insert into circular buffer */

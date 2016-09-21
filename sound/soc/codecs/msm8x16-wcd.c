@@ -97,7 +97,11 @@ enum {
 #define SPK_PMD 2
 #define SPK_PMU 3
 
+#if defined(MICBIAS_2700MV)
+#define MICBIAS_DEFAULT_VAL 2700000
+#else
 #define MICBIAS_DEFAULT_VAL 1800000
+#endif
 #define MICBIAS_MIN_VAL 1600000
 #define MICBIAS_STEP_SIZE 50000
 
@@ -112,6 +116,14 @@ enum {
 #define VOLTAGE_CONVERTER(value, min_value, step_size)\
 	((value - min_value)/step_size);
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
+#if defined(CONFIG_TCT_8X16_IDOL3)|| defined(CONFIG_TCT_8X16_IDOL347)
+uint8_t headset_enable_27;
+#endif
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
+#if defined(MICBIAS_2700MV)
+#define DAPM_MICBIAS_EXTERNAL_STANDALONE "MIC BIAS External Standalone"
+#endif
 enum {
 	AIF1_PB = 0,
 	AIF1_CAP,
@@ -2382,6 +2394,42 @@ static int msm8x16_wcd_put_iir_band_audio_mixer(
 	return 0;
 }
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
+static int get_micbias_27(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value  *ucontrol)
+{
+    pr_debug("hujin get ---[%d]\n", ucontrol->value.enumerated.item[0]);
+
+    return 0;
+}
+
+static int set_micbias_27(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value  *ucontrol)
+{
+    pr_debug("hujin set ---[%d]\n", ucontrol->value.enumerated.item[0]);
+       switch(ucontrol->value.enumerated.item[0]){
+               case 1:
+            pr_debug("hujin enable 27\n");
+            headset_enable_27 = 1;
+            break;
+               case 0:
+            pr_debug("hujin disable 27\n");
+            headset_enable_27 = 0;
+            break;
+               default:
+            pr_debug("hujin default error\n");
+            break;
+    };
+       return 0;
+}
+
+static const char * const tct_micbias_27_text[] = {
+               "OFF", "ON"};
+static const struct soc_enum tct_micbias_27_enum[] = {
+               SOC_ENUM_SINGLE_EXT(2, tct_micbias_27_text),
+};
+#endif
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
+
 static const char * const msm8x16_wcd_loopback_mode_ctrl_text[] = {
 		"DISABLE", "ENABLE"};
 static const struct soc_enum msm8x16_wcd_loopback_mode_ctl_enum[] = {
@@ -2578,7 +2626,11 @@ static const struct snd_kcontrol_new msm8x16_wcd_snd_controls[] = {
 	SOC_SINGLE_MULTI_EXT("IIR2 Band5", IIR2, BAND5, 255, 0, 5,
 	msm8x16_wcd_get_iir_band_audio_mixer,
 	msm8x16_wcd_put_iir_band_audio_mixer),
-
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
+	SOC_ENUM_EXT("TCT MICBIAS 27", tct_micbias_27_enum[0], get_micbias_27, set_micbias_27),
+#endif
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
 };
 
 static int tombak_hph_impedance_get(struct snd_kcontrol *kcontrol,
@@ -3376,7 +3428,30 @@ static int msm8x16_wcd_enable_ext_mb_source(struct snd_soc_codec *codec,
 
 	return ret;
 }
+#if defined(MICBIAS_2700MV)
+static int msm8x16_wcd_enable_mbhc_micbias(struct snd_soc_codec *codec,
+					   bool enable)
+{
+	int rc;
 
+	if (enable) {
+		rc = snd_soc_dapm_force_enable_pin(&codec->dapm,
+			DAPM_MICBIAS_EXTERNAL_STANDALONE);
+	} else {
+		rc = snd_soc_dapm_disable_pin(&codec->dapm,
+			DAPM_MICBIAS_EXTERNAL_STANDALONE);
+	}
+	snd_soc_dapm_sync(&codec->dapm);
+
+	if (rc)
+		pr_debug("%s: Failed to force %s micbias", __func__,
+			enable ? "enable" : "disable");
+	else
+		pr_debug("%s: Trying force %s micbias", __func__,
+			enable ? "enable" : "disable");
+	return rc;
+}
+#endif
 static int msm8x16_wcd_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 	struct snd_kcontrol *kcontrol, int event)
 {
@@ -3464,6 +3539,78 @@ static int msm8x16_wcd_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 	}
 	return 0;
 }
+#if defined(MICBIAS_2700MV)
+static int msm8x16_wcd_codec_enable_micbias2(struct snd_soc_dapm_widget *w,
+	struct snd_kcontrol *kcontrol, int event)
+{
+	struct snd_soc_codec *codec = w->codec;
+	struct msm8x16_wcd_priv *msm8x16_wcd = snd_soc_codec_get_drvdata(codec);
+	u16 micb_int_reg;
+	char *internal2_text = "Internal2";
+	char *external2_text = "External2";
+	char *external_text = "External";
+
+	dev_dbg(codec->dev, "%s %d %d\n", __func__, event,
+			     msm8x16_wcd->micb2_en_count);
+
+	micb_int_reg = MSM8X16_WCD_A_ANALOG_MICB_1_INT_RBIAS;
+	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+		if (msm8x16_wcd->micb2_en_count++ > 0)
+			return 0;
+		snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_MICB_2_EN,
+					0x80, 0x80);
+		if (strnstr(w->name, internal2_text, 30)) {
+			snd_soc_update_bits(codec, micb_int_reg, 0x10, 0x10);
+			snd_soc_update_bits(codec,
+					    MSM8X16_WCD_A_ANALOG_MICB_2_EN,
+					    0x60, 0x00);
+		}
+		if (!strnstr(w->name, external_text, 30))
+			snd_soc_update_bits(codec,
+				MSM8X16_WCD_A_ANALOG_MICB_1_EN, 0x05, 0x04);
+
+		break;
+	case SND_SOC_DAPM_POST_PMU:
+		usleep_range(20000, 20100);
+		if (msm8x16_wcd->micb2_en_count > 1)
+				return 0;
+		if (strnstr(w->name, internal2_text, 30)) {
+			snd_soc_update_bits(codec, micb_int_reg, 0x08, 0x08);
+			msm8x16_notifier_call(codec,
+					WCD_EVENT_PRE_MICBIAS_2_ON);
+		} else if (strnstr(w->name, external2_text, 30)) {
+			msm8x16_notifier_call(codec,
+					WCD_EVENT_PRE_MICBIAS_2_ON);
+		}
+		break;
+	case SND_SOC_DAPM_POST_PMD:
+		if (--msm8x16_wcd->micb2_en_count > 0)
+			return 0;
+		if (strnstr(w->name, internal2_text, 30)) {
+			msm8x16_notifier_call(codec,
+					WCD_EVENT_PRE_MICBIAS_2_OFF);
+		} else if (strnstr(w->name, external2_text, 30)) {
+			/*
+			 * send micbias turn off event to mbhc driver and then
+			 * break, as no need to set MICB_1_EN register.
+			 */
+			msm8x16_notifier_call(codec,
+					WCD_EVENT_PRE_MICBIAS_2_OFF);
+			snd_soc_update_bits(codec,
+					MSM8X16_WCD_A_ANALOG_MICB_2_EN,
+					0x80, 0x0);
+			break;
+		}
+		snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_MICB_1_EN,
+				0x44, 0x00);
+		snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_MICB_2_EN,
+					0x80, 0x0);
+		break;
+	}
+	return 0;
+}
+#endif
 
 static void tx_hpf_corner_freq_callback(struct work_struct *work)
 {
@@ -3634,11 +3781,16 @@ static int msm8x16_wcd_codec_enable_dec(struct snd_soc_dapm_widget *w,
 		}
 		/* apply the digital gain after the decimator is enabled*/
 		if ((w->shift) < ARRAY_SIZE(tx_digital_gain_reg))
-			snd_soc_write(codec,
-				  tx_digital_gain_reg[w->shift + offset],
-				  snd_soc_read(codec,
-				  tx_digital_gain_reg[w->shift + offset])
-				  );
+		{/*TCT-NB Tianhongwei workround for reg 484 changed*/
+			unsigned int value = snd_soc_read(codec,tx_digital_gain_reg[w->shift + offset]);
+			if(value!=0)
+			{
+				pr_err("TCT_NB codec reg[%ld] = %d \n",tx_digital_gain_reg[w->shift + offset],value);
+				value = 0;
+			}
+			snd_soc_write(codec,tx_digital_gain_reg[w->shift + offset],value);
+			/*TCT-NB Tianhongwei end*/
+		}
 		if (pdata->lb_mode) {
 			pr_debug("%s: loopback mode unmute the DEC\n",
 							__func__);
@@ -4809,14 +4961,28 @@ static const struct snd_soc_dapm_widget msm8x16_wcd_dapm_widgets[] = {
 		MSM8X16_WCD_A_ANALOG_MICB_1_EN, 7, 0,
 		msm8x16_wcd_codec_enable_micbias, SND_SOC_DAPM_PRE_PMU |
 		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+		#if defined(MICBIAS_2700MV)
+	SND_SOC_DAPM_MICBIAS_E("MIC BIAS Internal2",
+		SND_SOC_NOPM, 7, 0,
+		msm8x16_wcd_codec_enable_micbias2, SND_SOC_DAPM_PRE_PMU |
+		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+		#else
 	SND_SOC_DAPM_MICBIAS_E("MIC BIAS Internal2",
 		MSM8X16_WCD_A_ANALOG_MICB_2_EN, 7, 0,
 		msm8x16_wcd_codec_enable_micbias, SND_SOC_DAPM_PRE_PMU |
 		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+		#endif
 	SND_SOC_DAPM_MICBIAS_E("MIC BIAS Internal3",
 		MSM8X16_WCD_A_ANALOG_MICB_1_EN, 7, 0,
 		msm8x16_wcd_codec_enable_micbias, SND_SOC_DAPM_PRE_PMU |
 		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+#if defined(MICBIAS_2700MV)
+	SND_SOC_DAPM_MICBIAS_E(DAPM_MICBIAS_EXTERNAL_STANDALONE,
+		SND_SOC_NOPM,
+		0, 0, msm8x16_wcd_codec_enable_micbias2,
+		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+		SND_SOC_DAPM_POST_PMD),
+#endif
 	SND_SOC_DAPM_ADC_E("ADC1", NULL, MSM8X16_WCD_A_ANALOG_TX_1_EN, 7, 0,
 		msm8x16_wcd_codec_enable_adc, SND_SOC_DAPM_PRE_PMU |
 		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
@@ -4835,16 +5001,19 @@ static const struct snd_soc_dapm_widget msm8x16_wcd_dapm_widgets[] = {
 	SND_SOC_DAPM_VIRT_MUX("ADC2 MUX", SND_SOC_NOPM, 0, 0,
 		&tx_adc2_mux),
 
-	SND_SOC_DAPM_MICBIAS_E("MIC BIAS External",
-		MSM8X16_WCD_A_ANALOG_MICB_1_EN, 7, 0,
-		msm8x16_wcd_codec_enable_micbias, SND_SOC_DAPM_PRE_PMU |
+	SND_SOC_DAPM_MICBIAS("MIC BIAS External",
+		MSM8X16_WCD_A_ANALOG_MICB_1_EN, 7, 0),
+#if defined(MICBIAS_2700MV)
+	SND_SOC_DAPM_MICBIAS_E("MIC BIAS External2",
+		SND_SOC_NOPM, 0, 0,
+		msm8x16_wcd_codec_enable_micbias2, SND_SOC_DAPM_POST_PMU |
 		SND_SOC_DAPM_POST_PMD),
-
+#else
 	SND_SOC_DAPM_MICBIAS_E("MIC BIAS External2",
 		MSM8X16_WCD_A_ANALOG_MICB_2_EN, 7, 0,
 		msm8x16_wcd_codec_enable_micbias, SND_SOC_DAPM_POST_PMU |
 		SND_SOC_DAPM_POST_PMD),
-
+#endif
 
 	SND_SOC_DAPM_INPUT("AMIC3"),
 
@@ -5342,6 +5511,17 @@ static void msm8x16_wcd_configure_cap(struct snd_soc_codec *codec,
 	}
 }
 
+/*NB-TCT Tianhongwei add for PR.1040924,2015.07.09*/
+static ssize_t wcd_mbhc_current_plug_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct msm8x16_wcd_priv *msm8x16_wcd_priv = platform_get_drvdata(pdev);
+
+	return sprintf(buf, "%d \n", msm8x16_wcd_priv->mbhc.current_plug);
+}
+static DEVICE_ATTR(current_plug, 0444, wcd_mbhc_current_plug_show, NULL);
+/*NB-TCT Tianhongwei end*/
+
 static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 {
 	struct msm8x16_wcd_priv *msm8x16_wcd_priv;
@@ -5453,9 +5633,26 @@ static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 		return ret;
 	}
 
+
+#if defined(MICBIAS_2700MV)
+	wcd_mbhc_init(&msm8x16_wcd_priv->mbhc, codec,
+		msm8x16_wcd_enable_mbhc_micbias,
+		&mbhc_cb, &intr_ids, false); //furong modify orginal: true
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2014/11/19, headset det*/
+#elif defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
+	wcd_mbhc_init(&msm8x16_wcd_priv->mbhc, codec, &mbhc_cb, &intr_ids,
+			wcd_mbhc_registers,false);
+#else
 	wcd_mbhc_init(&msm8x16_wcd_priv->mbhc, codec, &mbhc_cb, &intr_ids,
 		      wcd_mbhc_registers, true);
-
+#endif
+/* [PLATFORM]-Add-END by TCTNB.HJ*/
+/*NB-TCT Tianhongwei add for PR.1040924,2015.07.09*/
+	ret = device_create_file(codec->dev, &dev_attr_current_plug);
+	if (ret) {
+		pr_err("device_create_file current_plug eror %d\n", ret);
+	}
+/*NB-TCT Tianhongwei end*/
 	msm8x16_wcd_priv->mclk_enabled = false;
 	msm8x16_wcd_priv->clock_active = false;
 	msm8x16_wcd_priv->config_mode_active = false;

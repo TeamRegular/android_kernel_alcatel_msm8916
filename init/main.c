@@ -912,3 +912,18 @@ static noinline void __init kernel_init_freeable(void)
 	/* rootfs is available now, try loading default modules */
 	load_default_modules();
 }
+
+/*[PLATFORM]-Add-BEGIN by WD, FR-717338 , 2014/10/31*/
+ bool alarm_boot = false;
+ static int __init alarm_boot_check(char *p)
+ {
+    if (!strcmp(p, "1"))
+          alarm_boot = true;
+      else
+          alarm_boot = false;
+     printk(KERN_ERR "Alarm alarm_boot=%d ;%s",alarm_boot,__func__);
+      return 0;
+  }
+
+early_param("androidboot.alarm", alarm_boot_check);
+/*[PLATFORM]-Add-END by TCTNB.WD*/

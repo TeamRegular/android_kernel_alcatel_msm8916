@@ -1,3 +1,4 @@
+
 ifeq ($(CONFIG_OF),y)
 
 dtb-$(CONFIG_ARCH_MSM8974) += msm8974-v1-cdp.dtb \

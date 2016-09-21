@@ -350,4 +350,7 @@ config SND_SOC_MSMZIRC
 	 interfaces with DSP, also it will enable
 	 the machine drivers and the corresponding
 	 DAI-links.
+config SND_QUAT_MI2S
+	tristate "QUAT I2S used in MSM8X16 boards"
+	depends on SND_SOC_MSM8X16
 endmenu

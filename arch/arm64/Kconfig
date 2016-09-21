@@ -620,6 +620,18 @@ config COMPAT
 
 	  If you want to execute 32-bit userspace applications, say Y.
 
+config TCT_8X16_COMMON
+        depends on ARCH_MSM8916
+        bool "MSM8916 TCT COMMON"
+        help
+          Support for the TCT COMMON device.
+
+config TCT_8X16_IDOL3
+        depends on ARCH_MSM8916
+        bool "MSM8916 IDOL3"
+        help
+          Support for the TCT IDOL3 device.
+
 config SYSVIPC_COMPAT
 	def_bool y
 	depends on COMPAT && SYSVIPC

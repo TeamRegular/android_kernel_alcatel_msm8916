@@ -476,6 +476,54 @@ struct input_keymap_entry {
 
 #define KEY_MICMUTE		248	/* Mute / unmute the microphone */
 
+/* [PLATFORM]-ADD-BEGIN by ning.wei SZ for HALL driver, 2014-07-25 */
+#define KEY_UNLOCK		249	/* wakeup the phone and then unlock the screen */
+/*[PLATFORM]-Add END by ning.wei SZ */
+/* [PLATFORM]-ADD-BEGIN by ning.wei SZ for HALL driver, 2014-07-25 */
+#if defined(CONFIG_TCT_8X16_ALTO5) \
+    || defined(CONFIG_TCT_8X16_ALTO5_PREMIUM) \
+    || defined(CONFIG_TCT_8X16_IDOL347) \
+    || defined(CONFIG_TCT_8X16_ALTO45_LATAM_B28)
+#define KEY_UNLOCK_COVER        250     /* 250, for LED/window cover type, unlock  */
+#define KEY_LOCK_LED_COVER      251     /* 251, for LED cover type, lock  */
+#endif
+
+/* [PLATFORM]-MODIFY-BEGIN by WJ for M823F HALL driver, 2015-05-21 */
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_M823_ORANGE)
+#define KEY_UNLOCK_COVER           250
+#define KEY_LOCK_LED_COVER         251
+#define KEY_LOCK_WINDOW_COVER      252
+#endif
+/* [PLATFORM]-MODIFY-END by WJ */
+
+/* [PLATFORM]-ADD-END by ning.wei SZ */
+
+/*wxc*/
+#if defined(CONFIG_TCT_8X16_POP10) || defined(CONFIG_TCT_8X16_IDOL3)
+#define KEY_UNLOCK_COVER        250     /* 250, for LED/window cover type, unlock  */
+#define KEY_LOCK_LED_COVER      251     /* 251, for LED cover type, lock  */
+/*[MOD]-Add BEGIN by weihong.chen, 2014/08/04*/
+#define KEY_LETTER_C            252     /*wakeup the phone and enter camera apk*/
+#define KEY_LETTER_M            253     /*wakeup the phone and enter music apk*/
+/*[MOD]-Add END by weihong.chen, 2014/08/04*/
+#endif
+
+//add by furong 2014/11/17 add TP gesture
+#ifdef CONFIG_TCT_8X16_IDOL347
+#define KEY_DOUBLE_CLICK_GESTURE	84
+#define KEY_UP_GESTURE	195
+#define KEY_DOWN_GESTURE	196
+#define KEY_LEFT_GESTURE	197
+#define KEY_RIGHT_GESTURE	197
+#define KEY_S_ALPHABET_GESTURE	198
+#define KEY_W_ALPHABET_GESTURE	199
+#define KEY_Z_ALPHABET_GESTURE	250
+#define KEY_V_ALPHABET_GESTURE	251
+#define KEY_O_ALPHABET_GESTURE	252
+#define KEY_M_ALPHABET_GESTURE	253
+#define KEY_C_ALPHABET_GESTURE	254
+#define KEY_E_ALPHABET_GESTURE	255
+#endif
 /* Code 255 is reserved for special needs of AT keyboard driver */
 
 #define BTN_MISC		0x100

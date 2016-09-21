@@ -1,6 +1,6 @@
 /* drivers/input/misc/kionix_accel.c - Kionix accelerometer driver
  *
- * Copyright (C) 2012-2015 Kionix, Inc.
+ * Copyright (C) 2012-2014 Kionix, Inc.
  * Written by Kuching Tan <kuchingtan@kionix.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * [BUFFIX]-Mod by huangshenglin@hoperun,porting L->M, task-1175888,2015/12/17
  */
 
 #include <linux/kernel.h>
@@ -26,7 +26,7 @@
 #include <linux/workqueue.h>
 #include <linux/module.h>
 #include <linux/slab.h>
-#include <linux/input/kionix_accel.h>
+#include "kionix_accel.h"
 #include <linux/version.h>
 #include <linux/proc_fs.h>
 #include <linux/regulator/consumer.h>
@@ -67,10 +67,8 @@
 #define KIONIX_ACCEL_WHO_AM_I_KXTJ9_1005	0x07
 #define KIONIX_ACCEL_WHO_AM_I_KXTJ9_1007	0x08
 #define KIONIX_ACCEL_WHO_AM_I_KXCJ9_1008	0x0A
-#define KIONIX_ACCEL_WHO_AM_I_KXTJ2_1029 0x09
+#define KIONIX_ACCEL_WHO_AM_I_KXTJ2_1009	0x09
 #define KIONIX_ACCEL_WHO_AM_I_KXCJK_1013	0x11
-
-
 
 /******************************************************************************
  * Accelerometer Grouping
@@ -79,7 +77,7 @@
 #define KIONIX_ACCEL_GRP2	2	/* KXTF9/I9-1001/J9-1005 */
 #define KIONIX_ACCEL_GRP3	3	/* KXTIK-1004 */
 #define KIONIX_ACCEL_GRP4	4	/* KXTJ9-1007/KXCJ9-1008 */
-#define KIONIX_ACCEL_GRP5	5	/* KXTJ2-1009  KXTJ2-1029   */
+#define KIONIX_ACCEL_GRP5	5	/* KXTJ2-1009 */
 #define KIONIX_ACCEL_GRP6	6	/* KXCJK-1013 */
 
 /******************************************************************************
@@ -296,13 +294,13 @@ struct kionix_accel_driver {
 	bool accel_drdy;
 
 	/* Function callback */
-	void (*kionix_accel_report_accel_data)(struct kionix_accel_driver
+	void (*kionix_accel_report_accel_data) (struct kionix_accel_driver
 						*acceld);
-	int (*kionix_accel_update_odr)(struct kionix_accel_driver *acceld,
+	int (*kionix_accel_update_odr) (struct kionix_accel_driver *acceld,
 					unsigned int poll_interval);
-	int (*kionix_accel_power_on_init)(struct kionix_accel_driver *acceld);
-	int (*kionix_accel_operate)(struct kionix_accel_driver *acceld);
-	int (*kionix_accel_standby)(struct kionix_accel_driver *acceld);
+	int (*kionix_accel_power_on_init) (struct kionix_accel_driver *acceld);
+	int (*kionix_accel_operate) (struct kionix_accel_driver *acceld);
+	int (*kionix_accel_standby) (struct kionix_accel_driver *acceld);
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	struct early_suspend early_suspend;
@@ -956,6 +954,10 @@ static void kionix_accel_grp4_report_accel_data(struct kionix_accel_driver
 	int err;
 	struct input_dev *input_dev = acceld->input_dev;
 	int loop;
+	//add by huangshenglin@hoperun,2016/1/4, task-1252678 ,sync event->time with hal.+++
+	ktime_t timestamp;
+	timestamp = ktime_get_boottime();
+	//add by huangshenglin@hoperun,2016/1/4 sync event->time with hal.--
 
 	/* Only read the output registers if enabled */
 	if (atomic_read(&acceld->accel_enabled) > 0) {
@@ -986,13 +988,16 @@ static void kionix_accel_grp4_report_accel_data(struct kionix_accel_driver
 
 				x = ((s16)
 				     le16_to_cpu(accel_data.accel_data_s16
-						 [acceld->axis_map_x]));
+						 [acceld->axis_map_x])) >>
+				    acceld->shift;
 				y = ((s16)
 				     le16_to_cpu(accel_data.accel_data_s16
-						 [acceld->axis_map_y]));
+						 [acceld->axis_map_y])) >>
+				    acceld->shift;
 				z = ((s16)
 				     le16_to_cpu(accel_data.accel_data_s16
-						 [acceld->axis_map_z]));
+						 [acceld->axis_map_z])) >>
+				    acceld->shift;
 
 				acceld->accel_data[acceld->axis_map_x] =
 				    (acceld->negate_x ? -x : x) +
@@ -1018,6 +1023,10 @@ static void kionix_accel_grp4_report_accel_data(struct kionix_accel_driver
 							 ABS_Z,
 							 acceld->accel_data
 							 [acceld->axis_map_z]);
+	//add by huangshenglin@hoperun,2016/1/4, task-1252678 ,sync event->time with hal.+++
+					input_event(acceld->input_dev,EV_SYN, SYN_TIME_SEC,ktime_to_timespec(timestamp).tv_sec);
+					input_event(acceld->input_dev,EV_SYN, SYN_TIME_NSEC,ktime_to_timespec(timestamp).tv_nsec);
+	//add by huangshenglin@hoperun,2016/1/4 sync event->time with hal.--
 					input_sync(acceld->input_dev);
 				}
 				write_unlock(&acceld->rwlock_accel_data);
@@ -1388,8 +1397,7 @@ static ssize_t kionix_accel_get_enable(struct device *dev,
 	struct i2c_client *client = to_i2c_client(dev);
 	struct kionix_accel_driver *acceld = i2c_get_clientdata(client);
 
-	return snprintf(buf, PAGE_SIZE, "%d\n",
-		       atomic_read(&acceld->accel_enabled) > 0 ? 1 : 0);
+	return snprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&acceld->accel_enabled) > 0 ? 1 : 0);
 }
 
 /* Allow users to enable/disable the device */
@@ -1410,7 +1418,8 @@ static ssize_t kionix_accel_set_enable(struct device *dev,
 
 	if (kionix_strtok(buf, count, &buf2, enable_count) < 0) {
 		KMSGERR(&acceld->client->dev,
-			"%s: No enable data being read.\n", __func__);
+			"%s: No enable data being read. "
+			"No enable data will be updated.\n", __func__);
 	} else {
 		/* Removes any leading negative sign */
 		while (*buf2 == '-')
@@ -1466,7 +1475,8 @@ static ssize_t kionix_accel_set_delay(struct device *dev,
 
 	if (kionix_strtok(buf, count, &buf2, delay_count) < 0) {
 		KMSGERR(&acceld->client->dev,
-			"%s: No delay data being read.", __func__);
+			"%s: No delay data being read. "
+			"No delay data will be updated.\n", __func__);
 	}
 
 	else {
@@ -1540,7 +1550,8 @@ static ssize_t kionix_accel_set_direct(struct device *dev,
 
 	if (kionix_strtok(buf, count, &buf2, direct_count) < 0) {
 		KMSGERR(&acceld->client->dev,
-			"%s: No direction data being read.\n", __func__);
+			"%s: No direction data being read. "
+			"No direction data will be updated.\n", __func__);
 	}
 
 	else {
@@ -1636,8 +1647,8 @@ static ssize_t kionix_accel_set_cali(struct device *dev,
 
 	if (kionix_strtok(buf, count, buf2, cali_count) < 0) {
 		KMSGERR(&acceld->client->dev,
-			"%s: Not enough calibration data being read.\n",
-			__func__);
+			"%s: Not enough calibration data being read. "
+			"No calibration data will be updated.\n", __func__);
 	} else {
 		/* Convert string to integers  */
 		for (i = 0; i < cali_count; i++) {
@@ -1647,8 +1658,9 @@ static ssize_t kionix_accel_set_cali(struct device *dev,
 				      (int *)&calibration[i]);
 			if (err < 0) {
 				KMSGERR(&acceld->client->dev,
-					"%s: No calibration data will be updated.\n",
-					__func__);
+					"%s: kstrtoint returned err = %d."
+					"No calibration data will be updated.\n",
+					__func__, err);
 				goto exit;
 			}
 		}
@@ -1677,10 +1689,10 @@ static DEVICE_ATTR(enable, S_IRUGO | S_IWUSR | S_IWGRP | S_IWOTH,
 		   kionix_accel_get_enable, kionix_accel_set_enable);
 static DEVICE_ATTR(poll_delay, S_IRUGO | S_IWUSR | S_IWGRP | S_IWOTH,
 		   kionix_accel_get_delay, kionix_accel_set_delay);
-static DEVICE_ATTR(direct, S_IRUGO | S_IWUSR | S_IWGRP | S_IWOTH,
+static DEVICE_ATTR(direct, S_IRUGO | S_IWUSR | S_IWGRP,
 		   kionix_accel_get_direct, kionix_accel_set_direct);
 static DEVICE_ATTR(data, S_IRUGO, kionix_accel_get_data, NULL);
-static DEVICE_ATTR(cali, S_IRUGO | S_IWUSR | S_IWGRP | S_IWOTH,
+static DEVICE_ATTR(cali, S_IRUGO | S_IWUSR | S_IWGRP,
 		   kionix_accel_get_cali, kionix_accel_set_cali);
 
 static struct attribute *kionix_accel_attributes[] = {
@@ -1696,8 +1708,10 @@ static struct attribute_group kionix_accel_attribute_group = {
 	.attrs = kionix_accel_attributes
 };
 
+
 static int kionix_verify(struct kionix_accel_driver *acceld)
 {
+       
 	int retval = i2c_smbus_read_byte_data(acceld->client, ACCEL_WHO_AM_I);
 	pr_info("%s: devices id is %d\n", __func__, retval);
 #if KIONIX_KMSG_INF
@@ -1730,9 +1744,9 @@ static int kionix_verify(struct kionix_accel_driver *acceld)
 		KMSGINF(&acceld->client->dev,
 			"this accelerometer is a KXCJ9-1008.\n");
 		break;
-	case KIONIX_ACCEL_WHO_AM_I_KXTJ2_1029:
+	case KIONIX_ACCEL_WHO_AM_I_KXTJ2_1009:
 		KMSGINF(&acceld->client->dev,
-			"this accelerometer is a KXTJ2-1029.\n");
+			"this accelerometer is a KXTJ2-1009.\n");
 		break;
 	case KIONIX_ACCEL_WHO_AM_I_KXCJK_1013:
 		KMSGINF(&acceld->client->dev,
@@ -2256,9 +2270,9 @@ static int kionix_accel_probe(struct i2c_client *client,
 		break;
 	case KIONIX_ACCEL_WHO_AM_I_KXTJ9_1007:
 	case KIONIX_ACCEL_WHO_AM_I_KXCJ9_1008:
-	case KIONIX_ACCEL_WHO_AM_I_KXTJ2_1029:
+	case KIONIX_ACCEL_WHO_AM_I_KXTJ2_1009:
 	case KIONIX_ACCEL_WHO_AM_I_KXCJK_1013:
-		if (err == KIONIX_ACCEL_WHO_AM_I_KXTJ2_1029)
+		if (err == KIONIX_ACCEL_WHO_AM_I_KXTJ2_1009)
 			acceld->accel_group = KIONIX_ACCEL_GRP5;
 		else if (err == KIONIX_ACCEL_WHO_AM_I_KXCJK_1013)
 			acceld->accel_group = KIONIX_ACCEL_GRP6;
@@ -2360,7 +2374,7 @@ static int kionix_accel_probe(struct i2c_client *client,
 	}
 
 	err =
-	    sysfs_create_group(&acceld->input_dev->dev.kobj,
+	    sysfs_create_group(&client->dev.kobj,
 			       &kionix_accel_attribute_group);
 	if (err) {
 		KMSGERR(&acceld->client->dev,
@@ -2474,7 +2488,7 @@ static const struct i2c_device_id kionix_accel_id[] = {
 };
 
 static struct of_device_id kionix_accel_match_table[] = {
-	{.compatible = "kionix,kxtj2-1029",},
+	{.compatible = "kionix,kxtj2-1009",},
 	{},
 };
 
@@ -2495,6 +2509,7 @@ static struct i2c_driver kionix_accel_driver = {
 
 static int __init kionix_accel_init(void)
 {
+pr_err("kionix init\n");
 	return i2c_add_driver(&kionix_accel_driver);
 }
 

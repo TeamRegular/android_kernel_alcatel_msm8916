@@ -39,7 +39,9 @@ out:
 	return ret;
 }
 
-
+#if defined(CONFIG_TCT_8X16_IDOL347)
+//void sd_status_report(int status);
+#endif
 static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 {
 	/* Schedule a card detection after a debounce timeout */
@@ -68,7 +70,9 @@ static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 				(host->caps2 & MMC_CAP2_CD_ACTIVE_HIGH) ?
 				"HIGH" : "LOW");
 		ctx->status = status;
-
+#if defined(CONFIG_TCT_8X16_IDOL347)
+		//sd_status_report(status);
+#endif
 		/* Schedule a card detection after a debounce timeout */
 		mmc_detect_change(host, msecs_to_jiffies(200));
 	}

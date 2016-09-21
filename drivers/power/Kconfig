@@ -383,6 +383,10 @@ config SMB135X_CHARGER
 	  The driver reports the charger status via the power supply framework.
 	  A charger status change triggers an IRQ via the device STAT pin.
 
+#JRD BSP START by eric.gong@tcl.com "[idol3-4.7][charger] porting smb1360."	  
+source "drivers/power/idol347/Kconfig"
+#JRD BSP END by eric.gong@tcl.com "[idol3-4.7][charger] porting smb1360."
+
 config SMB1360_CHARGER_FG
 	tristate "SMB1360 Charger and Fuel Guage"
 	depends on I2C
@@ -393,6 +397,12 @@ config SMB1360_CHARGER_FG
 	  uses voltage and coloumb counting for state of charge reporting.
 	  The driver reports the status via the power supply framework.
 	  A status change triggers an IRQ via the device STAT pin.
+
+config SMB1360_BATTID_CHECK
+	bool "check battery id"
+	depends on SMB1360_CHARGER_FG
+	help
+	  Say Y to enable battery id check to disable charging func.
 
 config SMB358_CHARGER
 	tristate "SMB358 Battery Charger"
@@ -542,6 +552,40 @@ config MSM_BCL_PERIPHERAL_CTL
 	  Say Y here to enable this BCL PMIC peripheral driver. This driver
 	  provides routines to configure and monitor the BCL
 	  PMIC peripheral.
+
+config CHARGER_FAN54015
+	tristate "FAN54015 battery charger driver"
+	help
+	 Say Y here to enable support for battery charging with FAN54015
+	 PMIC chips.
+
+config QPNP_NTC_SUPPORT
+	tristate "QPNP temporary control driver"
+	depends on SPMI
+	depends on OF_SPMI
+	depends on MSM_QPNP_INT
+	depends on THERMAL_QPNP_ADC_TM
+	help
+	  Say Y here to enable the ntc support.
+
+config QPNP_DOCK_POWER_SUPPLY_SUPPORT
+	tristate "smb1360 charging power supply driver"
+	depends on SPMI
+	depends on OF_SPMI
+	help
+	  Say Y here to enable the dock power supply support.
+
+config QPNP_POWER_SWITCH_SUPPORT
+	tristate "smb1360 charging power control driver"
+	depends on SPMI
+	depends on OF_SPMI
+	help
+	  Say Y here to enable the power switch support.
+
+config QPNP_BATT_STATUS_DEBUG
+	tristate "QPNP battery status debug"
+	help
+	  Say Y here to enable the reporter of battery status.
 
 source "drivers/power/reset/Kconfig"
 

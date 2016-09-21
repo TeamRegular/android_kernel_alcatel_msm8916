@@ -86,3 +86,10 @@ endif
 ifeq ($(CONFIG_BOSCH_BMA2X2_ENABLE_INT2),y)
 	EXTRA_CFLAGS += -DBMA2X2_ENABLE_INT2
 endif
+#yongzhong.cheng,2014/07/24,PR 724584: add proximity and light sensor config begin
+obj-$(CONFIG_SENSORS_TSL2772)	+= tsl277x.o
+#yongzhong.cheng,2014/07/24,PR 724584: add proximity and light sensor config end
+#[BUFFIX]-Add-bgein by huangshenglin@hoperun, task-1175896,1175888,2015/12/17,finish sensors drirver
+obj-$(CONFIG_GYRO_BMG160)	+= bmg160.o bmg160_driver.o #[BUFFIX]-Add- by TCTNB.XQJ, task1175896,2015/12/17,add gyro drirver
+obj-$(CONFIG_INPUT_KXTJ9)	+= kionix_accel.o
+#[BUFFIX]-End-by TCTNB.XQJ,

@@ -2,6 +2,9 @@
 # Makefile for nfc devices
 #
 
+#add by jch for bcm NFC driver development
+obj-$(CONFIG_BCM2079X_NFC)	+= bcm2079x-i2c.o
+#end add by jch for bcm NFC driver development
 obj-$(CONFIG_NFC_PN544)		+= pn544/
 obj-$(CONFIG_NFC_MICROREAD)	+= microread/
 obj-$(CONFIG_NFC_PN533)		+= pn533.o

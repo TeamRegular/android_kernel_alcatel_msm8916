@@ -11,7 +11,7 @@ menuconfig INPUT_TOUCHSCREEN
 
 if INPUT_TOUCHSCREEN
 
-source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
+#source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
 
 config TOUCHSCREEN_88PM860X
 	tristate "Marvell 88PM860x touchscreen"
@@ -937,24 +937,6 @@ config TOUCHSCREEN_FT5X06
          To compile this driver as a module, choose M here: the
          module will be called ft5x06_ts.
 
-config TOUCHSCREEN_FT5X06_PSENSOR
-       tristate "FocalTech proximity feature support"
-       depends on TOUCHSCREEN_FT5X06 && SENSORS
-       help
-         Say Y here if you want to support ft5x06's proximity
-         feature.
-
-         If unsure, say N.
-
-config TOUCHSCREEN_FT5X06_GESTURE
-       tristate "FocalTech gesture feature support"
-       depends on TOUCHSCREEN_FT5X06
-       help
-         Say Y here if you want to support ft5x06's gesture
-         feature.
-
-         If unsure, say N.
-
 config TOUCHSCREEN_MSTAR21XX
        tristate "mstar touchscreens"
        depends on I2C
@@ -1038,7 +1020,46 @@ config TOUCHSCREEN_GT9XX
 
           If unsure, say N.
 
+config TOUCHSCREEN_FT6336
+	bool "FocalTech FT6336 touchpanel driver"
+	depends on I2C
+	help
+	  Say Y here if you have a FocalTech FT6336 touchscreen.
+	  ft6336 controllers are multi touch controllers which can
+	  report some touches at a time.
+
+          If unsure, say N.
+
 source "drivers/input/touchscreen/gt9xx/Kconfig"
+
+
+source "drivers/input/touchscreen/ft6336/Kconfig"
+#[PLATFORM]-Add-BEGIN by TCTNB.ZXZ, FR-788135, 2014/09/25 add for FT5436 TP driver
+source "drivers/input/touchscreen/tp_FT5436/Kconfig"
+#[PLATFORM]-Add-END by TCTNB.ZXZ
+
+#[PLATFORM]-Add-BEGIN by TCTNB.ZXZ, FR-778074, 2014/09/20 add for msg2633 TP driver
+source "drivers/input/touchscreen/msg_tp/Kconfig"
+#[PLATFORM]-Add-END by TCTNB.ZXZ
+#[PLATFORM]-Add-BEGIN by TCTSH.furong,2014/11/18 add for msg2638 TP driver
+source "drivers/input/touchscreen/msg2638_tp/Kconfig"
+#[PLATFORM]-Add-END by TCTSH.furong
+#ADD-BEGIN by xingchen.wang 2015/01/29 CR.874750 idol3_5.5 2nd source TP development.
+source "drivers/input/touchscreen/s7020_idol3/Kconfig"
+#ADD-EDD by xingchen.wang 2015/01/29.
+# modify(add) by junfeng.zhou.sz for [TP driver development (1st source)] with PR721418 begin . 20140714 
+source "drivers/input/touchscreen/msg21xx/Kconfig"
+# modify(add) by junfeng.zhou.sz for [TP driver development (1st source)] with PR721418 end .
+source "drivers/input/touchscreen/tp_tct/Kconfig"
+source "drivers/input/touchscreen/gt9xx_v2/Kconfig"
+
+#[PLATFORM]-Add-BEGIN by TCTNB.YQJ, FR-789147, 2014/11/07 add for FT5436 TP driver
+source "drivers/input/touchscreen/ft5x36_idol3/Kconfig"
+#[PLATFORM]-Add-END by TCTNB.YQJ
+
+#[PLATFORM]-Add-BEGIN by TCTSH.FURONG, 2015/01/12 add for FT5436 TP driver
+source "drivers/input/touchscreen/ft5436_idol347/Kconfig"
+#[PLATFORM]-Add-END by TCTSH.FURONG
 
 config TOUCHSCREEN_BU21150
 	tristate "JDI AFE BU21150"
@@ -1061,17 +1082,4 @@ config INPUT_MT_WRAPPER
 	  Say Y here if you want to enable the driver.
 
 	  If unsure, say N.
-
-config TOUCHSCREEN_IT7260_I2C
-	tristate "IT7260 Touchscreen Driver"
-	depends on I2C
-	help
-	  Say Y here if you have a IT7260 Touchscreen Driver
-	  connected to your system.
-
-	  If unsure, say N.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called it7258_ts_i2c.
-
 endif

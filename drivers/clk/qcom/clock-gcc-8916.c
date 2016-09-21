@@ -252,6 +252,96 @@ static void __iomem *virt_bases[N_BASES];
 			| BVAL(10, 8, s##_source_val), \
 	}
 
+/* [PLATFORM]-Add-BEGIN by TCTSH.gyc, 2014/12/23, flash enable use gp_clk */
+
+#if defined(CONFIG_TCT_8X16_IDOL347)
+#define F0(f, s, div, m, n) \
+	{ \
+		.freq_hz = (f), \
+		.src_clk = &s##_clk_src.c, \
+		.m_val = (m), \
+		.n_val = ~((n)-(m)) * !!(n), \
+		.d_val = ~(n)+40,\
+		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
+			| BVAL(10, 8, s##_source_val), \
+	}
+#define F1(f, s, div, m, n) \
+	{ \
+		.freq_hz = (f), \
+		.src_clk = &s##_clk_src.c, \
+		.m_val = (m), \
+		.n_val = ~((n)-(m)) * !!(n), \
+		.d_val = ~(n)+20,\
+		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
+			| BVAL(10, 8, s##_source_val), \
+	}
+#define F2(f, s, div, m, n) \
+	{ \
+		.freq_hz = (f), \
+		.src_clk = &s##_clk_src.c, \
+		.m_val = (m), \
+		.n_val = ~((n)-(m)) * !!(n), \
+		.d_val = ~(n),\
+		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
+			| BVAL(10, 8, s##_source_val), \
+	}
+#define F3(f, s, div, m, n) \
+	{ \
+		.freq_hz = (f), \
+		.src_clk = &s##_clk_src.c, \
+		.m_val = (m), \
+		.n_val = ~((n)-(m)) * !!(n), \
+		.d_val = ~(n)-20,\
+		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
+			| BVAL(10, 8, s##_source_val), \
+	}
+#elif defined(CONFIG_TCT_8X16_COMMON)
+
+/* [PLATFORM]-Add-END by TCTSH.gyc, 2014/12/23 */
+/* [PLATFORM]-Add-BEGIN by TCTNB.qijiang.yu, 2014/05/13, flash enable use gp_clk */
+
+#define F0(f, s, div, m, n) \
+	{ \
+		.freq_hz = (f), \
+		.src_clk = &s##_clk_src.c, \
+		.m_val = (m), \
+		.n_val = ~((n)-(m)) * !!(n), \
+		.d_val = ~(n)-38,\
+		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
+			| BVAL(10, 8, s##_source_val), \
+	}
+#define F1(f, s, div, m, n) \
+	{ \
+		.freq_hz = (f), \
+		.src_clk = &s##_clk_src.c, \
+		.m_val = (m), \
+		.n_val = ~((n)-(m)) * !!(n), \
+		.d_val = ~(n)-34,\
+		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
+			| BVAL(10, 8, s##_source_val), \
+	}
+#define F2(f, s, div, m, n) \
+	{ \
+		.freq_hz = (f), \
+		.src_clk = &s##_clk_src.c, \
+		.m_val = (m), \
+		.n_val = ~((n)-(m)) * !!(n), \
+		.d_val = ~(n)-30,\
+		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
+			| BVAL(10, 8, s##_source_val), \
+	}
+#define F3(f, s, div, m, n) \
+	{ \
+		.freq_hz = (f), \
+		.src_clk = &s##_clk_src.c, \
+		.m_val = (m), \
+		.n_val = ~((n)-(m)) * !!(n), \
+		.d_val = ~(n)-25,\
+		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
+			| BVAL(10, 8, s##_source_val), \
+	}
+#endif
+/* [PLATFORM]-Add-END by TCTNB.qijiang.yu, 2014/05/13 */
 #define F_MDSS(f, s, div, m, n) \
 	{ \
 		.freq_hz = (f), \
@@ -638,6 +728,11 @@ static struct rcg_clk blsp1_qup1_i2c_apps_clk_src = {
 
 static struct clk_freq_tbl ftbl_gcc_blsp1_qup1_6_spi_apps_clk[] = {
 	F(    960000,	      xo,  10,	  1,	2),
+	/*MODIFIED-BEGIN by jianeng.yuan, 2016-04-07,BUG-1696141*/
+	//[PLATFORM]-Add-BEGIN by TCTSZ.pingao.yang, 2014/06/09, qup1_6 add clock 1.52Mhz
+	F(   1520000,	   gpll0,   4,	  1,	132),
+	//[PLATFORM]-Add-END by TCTSZ.pingao.yang, 2014/06/09
+	/*MODIFIED-END by jianeng.yuan,BUG-1696141*/
 	F(   4800000,	      xo,   4,	  0,	0),
 	F(   9600000,	      xo,   2,	  0,	0),
 	F(  16000000,	   gpll0,  10,	  1,	5),
@@ -868,8 +963,21 @@ static struct rcg_clk cci_clk_src = {
 };
 
 static struct clk_freq_tbl ftbl_gcc_camss_gp0_1_clk[] = {
+/*MODIFIED-BEGIN by jianeng.yuan, 2016-04-07,BUG-1696141*/
+//[PLATFORM]-Add-BEGIN by TCTSZ.pingao.yang, 2014/05/12, gp0 add clock 19.2Mhz
+	F( 19200000,	   gpll0,	1,	  3,	125),
+//[PLATFORM]-Add-END by TCTSZ.pingao.yang, 2014/05/12, gp0 add clock 19.2Mhz
+/*MODIFIED-END by jianeng.yuan,BUG-1696141*/
 	F( 100000000,	   gpll0,   8,	  0,	0),
 	F( 200000000,	   gpll0,   4,	  0,	0),
+/* [PLATFORM]-Add-BEGIN by TCTNB.qijiang.yu, 2014/05/13, flash enable use gp_clk */
+#if defined(CONFIG_TCT_8X16_COMMON)
+	F0( 24000,  		xo, 	16,   1, 50),
+	F1( 24001, 			xo, 	16,   1, 50),
+	F2( 24002, 			xo, 	16,   1, 50),
+	F3( 24003, 			xo, 	16,   1, 50),
+#endif
+/* [PLATFORM]-Add-END by TCTNB.qijiang.yu, 2014/05/13 */
 	F_END
 };
 

@@ -477,7 +477,9 @@ static struct regmap_config tps65132_regmap_config = {
 	.reg_bits = 8,
 	.val_bits = 8,
 };
-
+#ifdef CONFIG_TCT_8X16_IDOL347
+struct i2c_client *lcd_client;
+#endif
 static int tps65132_regulator_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
 {
@@ -485,6 +487,9 @@ static int tps65132_regulator_probe(struct i2c_client *client,
 	struct regulator_config config = {};
 	struct regulator_desc *rdesc;
 	int i, j, rc;
+#ifdef CONFIG_TCT_8X16_IDOL347
+        lcd_client = client;
+#endif
 
 	chip = devm_kzalloc(&client->dev, sizeof(struct tps65132_chip),
 							GFP_KERNEL);

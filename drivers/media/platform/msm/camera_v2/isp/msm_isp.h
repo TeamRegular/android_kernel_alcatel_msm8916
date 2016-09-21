@@ -53,8 +53,15 @@
 #define VFE_CLK_INFO_MAX 16
 #define STATS_COMP_BIT_MASK 0xFF0000
 
-#define MSM_ISP_MIN_AB 11000000
-#define MSM_ISP_MIN_IB 11000000
+/* MODIFIED-BEGIN by jianeng.yuan, 2016-03-22, BUG-1662429 */
+#if defined CONFIG_TCT_8X16_IDOL347
+#define MSM_ISP_MIN_AB 800000000
+#define MSM_ISP_MIN_IB 960000000
+#else
+#define MSM_ISP_MIN_AB 300000000
+#define MSM_ISP_MIN_IB 450000000
+#endif
+/* MODIFIED-END by jianeng.yuan,BUG-1662429 */
 
 struct vfe_device;
 struct msm_vfe_axi_stream;

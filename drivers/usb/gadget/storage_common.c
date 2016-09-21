@@ -349,8 +349,15 @@ fsg_hs_bulk_out_desc = {
 
 static struct usb_descriptor_header *fsg_hs_function[] = {
 	(struct usb_descriptor_header *) &fsg_intf_desc,
+//[BUGFIX]-Add-BEGIN by TCTNB.93391,10/17/2014,719974,USB driver autoinstall
+#if defined(CONFIG_JRD_CD_ROM_EMUM_EJECT) && !defined (FEATURE_TCTNB_MMITEST)
+	(struct usb_descriptor_header *) &fsg_hs_bulk_out_desc,
+	(struct usb_descriptor_header *) &fsg_hs_bulk_in_desc,
+#else
 	(struct usb_descriptor_header *) &fsg_hs_bulk_in_desc,
 	(struct usb_descriptor_header *) &fsg_hs_bulk_out_desc,
+#endif
+//[BUGFIX]-Add-END by TCTNB.93391,10/17/2014,719974,USB driver autoinstall
 	NULL,
 };
 

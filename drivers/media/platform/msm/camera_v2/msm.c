@@ -34,7 +34,9 @@
 static struct v4l2_device *msm_v4l2_dev;
 static struct list_head    ordered_sd_list;
 
+#if defined CONFIG_TCT_8X16_IDOL347
 static struct pm_qos_request msm_v4l2_pm_qos_request;
+#endif
 
 static struct msm_queue_head *msm_session_q;
 
@@ -189,6 +191,7 @@ static inline int __msm_queue_find_command_ack_q(void *d1, void *d2)
 	return (ack->stream_id == *(unsigned int *)d2) ? 1 : 0;
 }
 
+#if defined CONFIG_TCT_8X16_IDOL347
 static void msm_pm_qos_add_request(void)
 {
     pr_info("%s: add request",__func__);
@@ -208,6 +211,7 @@ void msm_pm_qos_update_request(int val)
     pm_qos_update_request(&msm_v4l2_pm_qos_request, val);
 }
 
+#endif
 struct msm_session *msm_session_find(unsigned int session_id)
 {
 	struct msm_session *session;
@@ -841,10 +845,10 @@ static int msm_close(struct file *filep)
 	if (!list_empty(&msm_v4l2_dev->subdevs))
 		list_for_each_entry(msm_sd, &ordered_sd_list, list)
 			__msm_sd_close_subdevs(msm_sd, &sd_close);
-
+#if defined CONFIG_TCT_8X16_IDOL347
 	/* remove msm_v4l2_pm_qos_request */
 	msm_pm_qos_remove_request();
-
+#endif
 	/* send v4l2_event to HAL next*/
 	msm_queue_traverse_action(msm_session_q, struct msm_session, list,
 		__msm_close_destry_session_notify_apps, NULL);
@@ -900,9 +904,10 @@ static int msm_open(struct file *filep)
 	spin_lock_irqsave(&msm_eventq_lock, flags);
 	msm_eventq = filep->private_data;
 	spin_unlock_irqrestore(&msm_eventq_lock, flags);
-
+#if defined CONFIG_TCT_8X16_IDOL347
 	/* register msm_v4l2_pm_qos_request */
 	msm_pm_qos_add_request();
+#endif
 
 	return rc;
 }

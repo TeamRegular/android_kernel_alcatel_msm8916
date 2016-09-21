@@ -557,6 +557,11 @@ struct msm_otg {
 	int ui_enabled;
 	bool pm_done;
 	struct qpnp_vadc_chip	*vadc_dev;
+/* [PLATFORM]-Mod-BEGIN by TCTNB.FLF, FR-813874, 2014/10/21, float charge detect */
+#ifdef CONFIG_TCT_8X16_COMMON
+	struct delayed_work carkit_detect;
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.FLF */
 	int ext_id_irq;
 	bool phy_irq_pending;
 	wait_queue_head_t	host_suspend_wait;

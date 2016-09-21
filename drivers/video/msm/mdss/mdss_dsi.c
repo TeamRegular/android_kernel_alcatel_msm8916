@@ -23,6 +23,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/leds-qpnp-wled.h>
 #include <linux/clk.h>
+#include <linux/pm_qos.h>
 
 #include "mdss.h"
 #include "mdss_panel.h"
@@ -30,7 +31,31 @@
 #include "mdss_debug.h"
 
 #define XO_CLK_RATE	19200000
+/* [PLATFORM]-Mod-BEGIN by huangshenglin@hoperun task-1208272, 2015/12/23,add for screen on time */
+#define DSI_DISABLE_PC_LATENCY 100
+#define DSI_ENABLE_PC_LATENCY PM_QOS_DEFAULT_VALUE
 
+static struct pm_qos_request mdss_dsi_pm_qos_request;
+
+static void mdss_dsi_pm_qos_add_request(void)
+{
+	pr_debug("%s: add request", __func__);
+	pm_qos_add_request(&mdss_dsi_pm_qos_request, PM_QOS_CPU_DMA_LATENCY,
+			PM_QOS_DEFAULT_VALUE);
+}
+
+static void mdss_dsi_pm_qos_remove_request(void)
+{
+	pr_debug("%s: remove request", __func__);
+	pm_qos_remove_request(&mdss_dsi_pm_qos_request);
+}
+
+static void mdss_dsi_pm_qos_update_request(int val)
+{
+	pr_debug("%s: update request %d", __func__, val);
+	pm_qos_update_request(&mdss_dsi_pm_qos_request, val);
+}
+/* [PLATFORM]-Mod-END by huangshenglin@hoperun */
 static int mdss_dsi_pinctrl_set_state(struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 					bool active);
 
@@ -94,6 +119,14 @@ static int mdss_dsi_panel_power_off(struct mdss_panel_data *pdata)
 	if (mdss_dsi_pinctrl_set_state(ctrl_pdata, false))
 		pr_debug("reset disable: pinctrl not enabled\n");
 
+ /*Start sleep in mode. panel reset High-Low-delay5ms-High By ChangShengBao*/
+#ifdef CONFIG_TCT_8X16_IDOL347
+        gpio_set_value((ctrl_pdata->rst_gpio), 0);
+	msleep(5);
+        gpio_set_value((ctrl_pdata->rst_gpio), 1);
+        gpio_free(ctrl_pdata->rst_gpio);
+#endif
+/*End sleep in mode. panel reset High-Low-delay5ms-High By ChangShengBao*/
 	if (ctrl_pdata->panel_bias_vreg) {
 		pr_debug("%s: Disabling panel bias vreg. ndx = %d\n",
 		       __func__, ctrl_pdata->ndx);
@@ -469,6 +502,7 @@ static int mdss_dsi_off(struct mdss_panel_data *pdata, int power_state)
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
+	mutex_lock(&ctrl_pdata->mutex);
 	panel_info = &ctrl_pdata->panel_data.panel_info;
 
 	pr_debug("%s+: ctrl=%p ndx=%d power_state=%d\n",
@@ -511,6 +545,7 @@ panel_power_ctrl:
 		panel_info->mipi.frame_rate = panel_info->new_fps;
 
 end:
+	mutex_unlock(&ctrl_pdata->mutex);
 	pr_debug("%s-:\n", __func__);
 
 	return ret;
@@ -688,6 +723,58 @@ static int mdss_dsi_pinctrl_init(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_TCT_8X16_IDOL347
+#include <linux/i2c.h>
+
+#define LCD_TPS65132_I2C_ADDRESS		       0x3E
+#define LCD_TPS65132_VPOS_ADDRESS		0x00
+#define LCD_TPS65132_VNEG_ADDRESS		0x01
+#define LCD_TPS65132_DIS_ADDRESS		       0x03
+#define LCD_TPS65132_CONTROL_ADDRESS       0xFF
+
+extern struct i2c_client *lcd_client;
+static int lcd_tps65132_i2c_write(u8 addr, u8 val)
+{
+	int ret = 0;
+	struct i2c_msg msg;
+	u8 data_buf[] = {addr,val};
+	
+       msg.flags = !I2C_M_RD;
+       msg.addr  = LCD_TPS65132_I2C_ADDRESS;
+       msg.len   = 2;
+       msg.buf   = data_buf;
+
+	ret = i2c_transfer(lcd_client->adapter, &msg, 1);
+	
+	if(ret < 0) {
+		pr_err( "i2c transfer  error %d\n", ret);
+		return ret;
+	}
+	return 0;
+}
+static int lcd_tps65132_init(void)
+{
+	int ret = 0;
+	
+	ret = lcd_tps65132_i2c_write(LCD_TPS65132_VPOS_ADDRESS, 0x0F); /* modify VPOS address 0x0F output 5.5V By BaoChangSheng*/
+	if (ret) {
+		printk("VPOS Register: I2C Write failure\n");
+	}
+	ret = lcd_tps65132_i2c_write(LCD_TPS65132_VNEG_ADDRESS, 0x0F); /* modify VNEG address 0x0F output -5.5V By BaoChangSheng*/
+	if (ret) {
+		printk("VNEG Register: I2C write failure\n");
+	}
+	ret = lcd_tps65132_i2c_write(LCD_TPS65132_DIS_ADDRESS, 0x0F);
+	if (ret) {
+		pr_err("Apps freq DIS Register: I2C write failure\n");
+	}
+       ret = lcd_tps65132_i2c_write(LCD_TPS65132_CONTROL_ADDRESS, 0xF0);
+	if (ret) {
+		pr_err("Control Register: I2C write failure\n");
+	}
+	return 1;
+}
+#endif
 static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 {
 	int ret = 0;
@@ -706,6 +793,7 @@ static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 	pr_debug("%s+: ctrl=%p ndx=%d cur_blank_state=%d\n", __func__,
 		ctrl_pdata, ctrl_pdata->ndx, pdata->panel_info.blank_state);
 
+	mdss_dsi_pm_qos_update_request(DSI_DISABLE_PC_LATENCY);//[PLATFORM]-Mod by huangshenglin@hoperun ,task-1208272, 2015/12/23,for screen on time
 	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 1);
 
 	if (pdata->panel_info.blank_state == MDSS_PANEL_BLANK_LOW_POWER) {
@@ -714,7 +802,14 @@ static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 			ret = ctrl_pdata->low_power_config(pdata, false);
 		goto error;
 	}
-
+/* resume lcd output +/-5.5v by BaoChangSheng */
+#ifdef CONFIG_TCT_8X16_IDOL347
+       ret=lcd_tps65132_init();
+       if(ret<0){
+	   	pr_err("%s: tps65132 error\n", __func__);
+       }
+#endif
+/* resume lcd output +/-5.5v by BaoChangSheng */
 	if (!(ctrl_pdata->ctrl_state & CTRL_STATE_PANEL_INIT)) {
 		if (!pdata->panel_info.dynamic_switch_pending) {
 			ret = ctrl_pdata->on(pdata);
@@ -736,6 +831,7 @@ static int mdss_dsi_unblank(struct mdss_panel_data *pdata)
 
 error:
 	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 0);
+	mdss_dsi_pm_qos_update_request(DSI_ENABLE_PC_LATENCY);//[PLATFORM]-Mod by huangshenglin@hoperun ,task-1208272, 2015/12/23,for screen on time
 	pr_debug("%s-:\n", __func__);
 
 	return ret;
@@ -1292,7 +1388,11 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 		ctrl_pdata->ctrl_state |= CTRL_STATE_MDP_ACTIVE;
 		if (ctrl_pdata->on_cmds.link_state == DSI_HS_MODE)
 			rc = mdss_dsi_unblank(pdata);
+
+#ifdef CONFIG_TCT_8X16_IDOL347
 		pdata->panel_info.esd_rdy = true;
+#endif
+
 		break;
 	case MDSS_EVENT_BLANK:
 		power_state = (int) (unsigned long) arg;
@@ -1301,6 +1401,11 @@ static int mdss_dsi_event_handler(struct mdss_panel_data *pdata,
 		break;
 	case MDSS_EVENT_PANEL_OFF:
 		power_state = (int) (unsigned long) arg;
+
+#ifdef CONFIG_TCT_8X16_IDOL347
+                pdata->panel_info.esd_rdy = false;
+#endif
+                
 		ctrl_pdata->ctrl_state &= ~CTRL_STATE_MDP_ACTIVE;
 		if (ctrl_pdata->off_cmds.link_state == DSI_LP_MODE)
 			rc = mdss_dsi_blank(pdata, power_state);
@@ -1600,6 +1705,7 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
 		}
 		disable_irq(gpio_to_irq(ctrl_pdata->disp_te_gpio));
 	}
+	mdss_dsi_pm_qos_add_request();//[PLATFORM]-Mod by huangshenglin@hoperun ,task-1208272, 2015/12/23,for screen on time
 	pr_debug("%s: Dsi Ctrl->%d initialized\n", __func__, index);
 	return 0;
 
@@ -1627,6 +1733,8 @@ static int mdss_dsi_ctrl_remove(struct platform_device *pdev)
 		pr_err("%s: no driver data\n", __func__);
 		return -ENODEV;
 	}
+
+	mdss_dsi_pm_qos_remove_request();//[PLATFORM]-Mod by huangshenglin@hoperun ,task-1208272, 2015/12/23,for screen on time
 
 	for (i = DSI_MAX_PM - 1; i >= 0; i--) {
 		if (msm_dss_config_vreg(&pdev->dev,
@@ -1922,9 +2030,15 @@ int dsi_panel_device_register(struct device_node *pan_node,
 
 	ctrl_pdata->panel_data.event_handler = mdss_dsi_event_handler;
 
+#ifdef CONFIG_TCT_8X16_IDOL347
+        if (ctrl_pdata->status_mode == ESD_REG_HX8394D || 
+                ctrl_pdata->status_mode == ESD_REG_HX8394F)
+                ctrl_pdata->check_status = mdss_dsi_hx8394d_reg_status_check;
+#endif
 	if (ctrl_pdata->status_mode == ESD_REG ||
 			ctrl_pdata->status_mode == ESD_REG_NT35596)
 		ctrl_pdata->check_status = mdss_dsi_reg_status_check;
+
 	else if (ctrl_pdata->status_mode == ESD_BTA)
 		ctrl_pdata->check_status = mdss_dsi_bta_status_check;
 

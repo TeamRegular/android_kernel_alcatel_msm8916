@@ -30,7 +30,13 @@
 
 #define MAX_NUM_IRQS 14
 #define NUM_IRQ_REGS 2
-#define WCD9XXX_SYSTEM_RESUME_TIMEOUT_MS 700
+
+//merge qualcomm patch, rong.fu, 2015/02/11, pr930852
+#if defined(CONFIG_TCT_8X16_IDOL347) || defined(CONFIG_TCT_8X16_IDOL3)
+	#define WCD9XXX_SYSTEM_RESUME_TIMEOUT_MS 700
+#else
+	#define WCD9XXX_SYSTEM_RESUME_TIMEOUT_MS 300
+#endif
 
 #define BYTE_BIT_MASK(nr) (1UL << ((nr) % BITS_PER_BYTE))
 #define BIT_BYTE(nr) ((nr) / BITS_PER_BYTE)
@@ -158,6 +164,8 @@ int wcd9xxx_spmi_request_irq(int irq, irq_handler_t handler,
 			const char *name, void *priv)
 {
 	int rc;
+//merge qualcomm patch, rong.fu, 2015/02/11, pr930852
+#if defined(CONFIG_TCT_8X16_IDOL347) || defined(CONFIG_TCT_8X16_IDOL3)
 	unsigned long irq_flags;
 
 	map.linuxirq[irq] =
@@ -177,6 +185,17 @@ int wcd9xxx_spmi_request_irq(int irq, irq_handler_t handler,
 				wcd9xxx_spmi_irq_handler,
 				irq_flags,
 				name, priv);
+#else
+	map.linuxirq[irq] =
+		spmi_get_irq_byname(map.spmi[BIT_BYTE(irq)], NULL,
+				irq_names[irq]);
+	rc = devm_request_threaded_irq(&map.spmi[BIT_BYTE(irq)]->dev,
+				map.linuxirq[irq], NULL,
+				wcd9xxx_spmi_irq_handler,
+				IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING
+				| IRQF_ONESHOT,
+				name, priv);
+#endif
 		if (rc < 0) {
 			dev_err(&map.spmi[BIT_BYTE(irq)]->dev,
 				"Can't request %d IRQ\n", irq);

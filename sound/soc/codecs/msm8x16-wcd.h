@@ -281,6 +281,9 @@ struct msm8x16_wcd_priv {
 	u32 rx_bias_count;
 	s32 dmic_1_2_clk_cnt;
 	u32 mute_mask;
+	#if defined(MICBIAS_2700MV)
+	u32 micb2_en_count;
+	#endif
 	bool mclk_enabled;
 	bool clock_active;
 	bool config_mode_active;

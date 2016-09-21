@@ -927,6 +927,7 @@ first_try:
 			else
 				ret = -ENODEV;
 			spin_unlock_irq(&epfile->ffs->eps_lock);
+#ifndef CONFIG_TCT_8X16_IDOL3	/*TCT-NB Tianhongwei modify for PR.961369   2015.04.23*/
 			if (read && ret > 0) {
 				if (len != MAX_BUF_LEN && ret < len)
 					pr_err("less data(%zd) recieved than intended length(%zu)\n",
@@ -942,6 +943,19 @@ first_try:
 					ret = -EFAULT;
 				}
 			}
+#else
+			if (ret > len) {
+				pr_err("More data(%zd) recieved than intended length(%zu)\n",
+						ret, len);
+			}
+
+			if (read && ret > 0 &&
+				unlikely(copy_to_user(buf, data, ret))) {
+				pr_err("Fail to copy to user len:%zd\n",
+						ret);
+				ret = -EFAULT;
+			}
+#endif/*TCT-NB Tianhongwei modify for PR.961369 end*/
 		}
 	}
 

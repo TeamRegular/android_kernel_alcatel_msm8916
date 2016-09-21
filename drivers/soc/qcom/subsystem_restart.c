@@ -49,6 +49,10 @@ module_param(disable_restart_work, uint, S_IRUGO | S_IWUSR);
 static int enable_debug;
 module_param(enable_debug, int, S_IRUGO | S_IWUSR);
 
+#ifdef CONFIG_MSM_DLOAD_MODE
+char panic_subsystem[16];
+#endif /* CONFIG_MSM_DLOAD_MODE */
+
 /**
  * enum p_subsys_state - state of a subsystem (private)
  * @SUBSYS_NORMAL: subsystem is operating normally
@@ -903,6 +907,12 @@ int subsystem_restart_dev(struct subsys_device *dev)
 	pr_info("Restart sequence requested for %s, restart_level = %s.\n",
 		name, restart_levels[dev->restart_level]);
 
+	/* FR-793575, save subsystem name */
+#ifdef CONFIG_MSM_DLOAD_MODE
+	memset(panic_subsystem, 0, sizeof(panic_subsystem));
+	memcpy(panic_subsystem, name, strlen(name));
+#endif /* CONFIG_MSM_DLOAD_MODE */
+
 	if (WARN(disable_restart_work == DISABLE_SSR,
 		"subsys-restart: Ignoring restart request for %s.\n", name)) {
 		return 0;
@@ -1636,6 +1646,10 @@ static int __init subsys_restart_init(void)
 			&panic_nb);
 	if (ret)
 		goto err_soc;
+
+#ifdef CONFIG_MSM_DLOAD_MODE
+	sprintf(panic_subsystem, "%s", "unknown");
+#endif /* CONFIG_MSM_DLOAD_MODE */
 
 	return 0;
 

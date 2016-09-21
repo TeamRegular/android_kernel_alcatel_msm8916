@@ -139,6 +139,9 @@ snd-soc-wm9705-objs := wm9705.o
 snd-soc-wm9712-objs := wm9712.o
 snd-soc-wm9713-objs := wm9713.o
 snd-soc-wm-hubs-objs := wm_hubs.o
+#[AUDIO]-ADD BEGIN by fu.yu,2015-12-17,Task-1175997,for ak4375 and tfa9897
+snd-soc-idol347-objs := idol347/ak4375.o idol347/tfa9897.o
+#[AUDIO]-ADD END by fu.yu,2015-12-17
 
 snd-soc-msm-stub-objs := msm_stub.o
 obj-$(CONFIG_SND_SOC_MSM_HDMI_CODEC_RX) := msm_hdmi_codec_rx.o
@@ -223,7 +226,13 @@ obj-$(CONFIG_SND_SOC_MSM8X10_WCD)	+= snd-soc-msm8x10-wcd.o wcd9xxx-resmgr.o wcd9
 obj-$(CONFIG_SND_SOC_WCD9335)	+= snd-soc-wcd9335.o
 obj-$(CONFIG_AUDIO_EXT_CLK)	+= audio-ext-clock.o
 obj-$(CONFIG_SND_SOC_WCD9XXX)   += snd-soc-wcd9xxx.o
+#[PLATFORM]-Add-BEGIN by TCTNB.HJ, 2014/11/18, HIFI
+ifdef CONFIG_TCT_8X16_IDOL3
+obj-$(CONFIG_SND_SOC_MSM8X16_WCD)	+= snd-soc-msm8x16-wcd.o msm8916-wcd-irq.o ak4375.o
+else
 obj-$(CONFIG_SND_SOC_MSM8X16_WCD)	+= snd-soc-msm8x16-wcd.o msm8916-wcd-irq.o
+endif
+#[PLATFORM]-Add-END by TCTNB.HJ
 obj-$(CONFIG_SND_SOC_WCD_MBHC)  += snd-soc-wcd-mbhc.o
 obj-$(CONFIG_SND_SOC_WCD_CPE) += snd-soc-wcd-cpe.o
 obj-$(CONFIG_SND_SOC_MSM8909_WCD)	+= snd-soc-msm8909-wcd.o msm8916-wcd-irq.o
@@ -281,6 +290,9 @@ obj-$(CONFIG_SND_SOC_WM9713)	+= snd-soc-wm9713.o
 obj-$(CONFIG_SND_SOC_WM_ADSP)	+= snd-soc-wm-adsp.o
 obj-$(CONFIG_SND_SOC_WM_HUBS)	+= snd-soc-wm-hubs.o
 obj-$(CONFIG_SND_SOC_MSM_STUB)  += snd-soc-msm-stub.o
+#[AUDIO]-ADD BEGIN by fu.yu,2015-12-17,Task-1175997,for ak4375 and tfa9897
+obj-$(CONFIG_SND_SOC_IDOL347)	+= snd-soc-idol347.o
+#[AUDIO]-ADD END by fu.yu,2015-12-17
 
 # Amp
 obj-$(CONFIG_SND_SOC_MAX9877)	+= snd-soc-max9877.o

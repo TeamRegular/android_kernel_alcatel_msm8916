@@ -89,3 +89,7 @@ obj-$(CONFIG_GPIO_WM8994)	+= gpio-wm8994.o
 obj-$(CONFIG_GPIO_XILINX)	+= gpio-xilinx.o
 obj-$(CONFIG_MSM_SMP2P)		+= gpio-msm-smp2p.o
 obj-$(CONFIG_MSM_SMP2P_TEST)	+= gpio-msm-smp2p-test.o
+#[PLATFORM]-add by TCTNB.ZXZ,2015/01/07,PR-879146,for BOARD ID status
+obj-$(CONFIG_GPIO_BOARD_ID_STATUS)      += gpio-board-id-status.o
+#[PLATFORM]-add by TCTNB.ZXZ,2015/03/03,PR-937914,for GPIO NPI DOWN
+obj-$(CONFIG_GPIO_NPI_DOWN_STATUS)      += gpio-npi-down-status.o

@@ -166,7 +166,11 @@
 #define TLMMV4_QDSD_PULL_OFFSET			0x3
 #define TLMMV4_QDSD_CONFIG_WIDTH		0x5
 #define TLMMV4_QDSD_DRV_MASK			0x7
-
+/* [PLATFORM]-Add-BEGIN by TCTNB.qijiang.yu, 2014/05/22, gpio32 set to gp_clk and gpio mode */
+#if defined(CONFIG_TCT_8X16_COMMON)
+void __iomem *pub_cfg_reg_32;
+#endif
+/* [PLATFORM]-Add-END by TCTNB */
 struct msm_sdc_regs {
 	unsigned long pull_mask;
 	unsigned long pull_shft;
@@ -623,12 +627,36 @@ static void msm_tlmm_gp_fn(uint pin_no, u32 func, bool enable,
 {
 	unsigned int val;
 	void __iomem *cfg_reg = TLMM_GP_CFG(pinfo, pin_no);
+#if defined(CONFIG_TCT_8X16_COMMON)
+	if (pin_no == 32){
+		pub_cfg_reg_32 = TLMM_GP_CFG(pinfo, pin_no);
+		printk("~~~pin_no =%d,func=%d\n",pin_no,func);
+	}
+#endif
 	val = readl_relaxed(cfg_reg);
 	val &= ~(TLMM_GP_FUNC_MASK << TLMM_GP_FUNC_SHFT);
 	if (enable)
 		val |= (func << TLMM_GP_FUNC_SHFT);
 	writel_relaxed(val, cfg_reg);
 }
+/* [PLATFORM]-Add-BEGIN by TCTNB.qijiang.yu, 2014/05/22, gpio32 set to gp_clk and gpio mode */
+#if defined(CONFIG_TCT_8X16_COMMON)
+void pub_msm_tlmm_v4_gp_fn_gpio_32(uint pin_no, u32 func,
+								bool enable)
+{
+	unsigned int val;
+	if(pin_no == 32){
+		printk("~~~pin_no =%d,func=%d\n",pin_no,func);
+		val = readl_relaxed(pub_cfg_reg_32);
+		val &= ~(TLMM_GP_FUNC_MASK << TLMM_GP_FUNC_SHFT);
+		if (enable)
+			val |= (func << TLMM_GP_FUNC_SHFT);
+		writel_relaxed(val, pub_cfg_reg_32);
+	}
+}
+EXPORT_SYMBOL_GPL(pub_msm_tlmm_v4_gp_fn_gpio_32);
+#endif
+/* [PLATFORM]-Add-END by TCTNB.qijiang.yu */
 
 /* GPIO CHIP */
 static int msm_tlmm_gp_get(struct gpio_chip *gc, unsigned offset)

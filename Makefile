@@ -593,6 +593,16 @@ KBUILD_CFLAGS += $(call cc-option,-fno-reorder-blocks,) \
                  $(call cc-option,-fno-partial-inlining)
 endif
 
+# Architecture-Add-Begin
+# ArchiNO:(002.product_operator_macro)
+KBUILD_CFLAGS += -DTARGET_PRODUCT=\"$(TARGET_PRODUCT)\"
+KBUILD_CFLAGS += -DTARGET_OPERATOR=\"$(TARGET_OPERATOR)\"
+KBUILD_CFLAGS += -DTARGET_PRODUCT_$(shell echo "$(TARGET_PRODUCT)" | tr '[a-z]' '[A-Z]')
+KBUILD_CFLAGS += -DTARGET_OPERATOR_$(shell echo "$(TARGET_OPERATOR)" | tr '[a-z]' '[A-Z]')
+# ArchiNO:(007.tct_feature)
+-include $(srctree)/../out/target/product/$(TARGET_PRODUCT)/tct_intermediates/feature/global_kernel.mk
+# Architecture-Add-End
+
 ifneq ($(CONFIG_FRAME_WARN),0)
 KBUILD_CFLAGS += $(call cc-option,-Wframe-larger-than=${CONFIG_FRAME_WARN})
 endif

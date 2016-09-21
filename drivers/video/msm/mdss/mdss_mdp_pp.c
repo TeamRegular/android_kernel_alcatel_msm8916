@@ -4665,6 +4665,9 @@ int mdss_mdp_ad_input(struct msm_fb_data_type *mfd,
 			mdss_fb_set_backlight(mfd, bl);
 			mutex_unlock(&mfd->bl_lock);
 			mutex_lock(&ad->lock);
+			#ifdef CONFIG_TCT_8X16_IDOL347
+			mfd->calib_mode_bl = bl;
+			#endif
 		} else {
 			pr_warn("should be in calib mode\n");
 		}

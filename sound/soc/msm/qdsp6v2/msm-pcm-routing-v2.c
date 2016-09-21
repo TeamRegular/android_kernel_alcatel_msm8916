@@ -1684,6 +1684,17 @@ static int msm_routing_ext_ec_put(struct snd_kcontrol *kcontrol,
 		msm_route_ext_ec_ref = AFE_PORT_INVALID;
 		break;
 	}
+/*TIANHONGWEI ADD FOR DEBUG*/
+	if(mux>4)
+	{
+		ret = -EINVAL;
+		mutex_unlock(&routing_lock);
+		pr_err("%s: mux = %d wrong mux \n",
+			__func__, mux);
+
+		return ret;
+	}
+/*TIANHONGWEI 2015/02/03 */
 	if (!voc_set_ext_ec_ref(msm_route_ext_ec_ref, state)) {
 		mutex_unlock(&routing_lock);
 		snd_soc_dapm_mux_update_power(widget, kcontrol, mux, e);
@@ -2116,6 +2127,11 @@ static const struct snd_kcontrol_new mi2s_hl_mixer_controls[] = {
 	SOC_SINGLE_EXT("INTERNAL_FM_TX", MSM_BACKEND_DAI_SECONDARY_MI2S_RX,
 	MSM_BACKEND_DAI_INT_FM_TX, 1, 0, msm_routing_get_port_mixer,
 	msm_routing_put_port_mixer),
+/* [AUDIO]-ADD BEGIN by fu.yu,2015-12-17,Task-1175992,for smart PA from L */
+	SOC_SINGLE_EXT("TERT_MI2S_TX", MSM_BACKEND_DAI_SECONDARY_MI2S_RX,
+	MSM_BACKEND_DAI_TERTIARY_MI2S_TX, 1, 0, msm_routing_get_port_mixer,
+	msm_routing_put_port_mixer),
+/* [AUDIO]-ADD END by fu.yu,2015-12-17 */
 };
 
 static const struct snd_kcontrol_new primary_mi2s_rx_mixer_controls[] = {
@@ -4518,10 +4534,13 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 	SND_SOC_DAPM_AIF_IN("SEC_MI2S_DL_HL",
 		"Secondary MI2S_RX Hostless Playback",
 		0, 0, 0, 0),
+/* [AUDIO]-ADD BEGIN by fu.yu,2015-12-17,Task-1175992,for smart PA from L */
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
 	SND_SOC_DAPM_AIF_IN("QUAT_MI2S_DL_HL",
 		"Quaternary MI2S_RX Hostless Playback",
 		0, 0, 0, 0),
-
+#endif
+/* [AUDIO]-ADD END by fu.yu,2015-12-17 */
 	SND_SOC_DAPM_AIF_IN("AUXPCM_DL_HL", "AUXPCM_HOSTLESS Playback",
 		0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("AUXPCM_UL_HL", "AUXPCM_HOSTLESS Capture",
@@ -5085,6 +5104,9 @@ static const struct snd_soc_dapm_route intercon[] = {
 
 	{"SEC_MI2S_RX Port Mixer", "PRI_MI2S_TX", "PRI_MI2S_TX"},
 	{"SEC_MI2S_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
+/* [AUDIO]-ADD BEGIN by fu.yu,2015-12-17,Task-1175992,for smart PA from L */
+	{"SEC_MI2S_RX Port Mixer", "TERT_MI2S_TX", "TERT_MI2S_TX"},
+/* [AUDIO]-ADD END by fu.yu */
 
 	{"PRI_MI2S_RX Audio Mixer", "MultiMedia1", "MM_DL1"},
 	{"PRI_MI2S_RX Audio Mixer", "MultiMedia2", "MM_DL2"},
@@ -5617,7 +5639,11 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"SEC_MI2S_RX", NULL, "SEC_MI2S_DL_HL"},
 	{"PRI_MI2S_RX", NULL, "PRI_MI2S_DL_HL"},
 	{"QUAT_MI2S_UL_HL", NULL, "QUAT_MI2S_TX"},
-
+/* [AUDIO]-ADD BEGIN by fu.yu,2015-12-17,Task-1175992,for smart PA from L */
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
+	{"QUAT_MI2S_RX", NULL, "QUAT_MI2S_DL_HL"},
+#endif
+/* [AUDIO]-ADD END by fu.yu,2015-12-17 */
 	{"SLIMBUS_0_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
 	{"SLIMBUS_0_RX Port Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},
 	{"SLIMBUS_0_RX Port Mixer", "SLIM_1_TX", "SLIMBUS_1_TX"},
@@ -5732,6 +5758,9 @@ static const struct snd_soc_dapm_route intercon[] = {
 
 	{"QUAT_MI2S_RX Port Mixer", "PRI_MI2S_TX", "PRI_MI2S_TX"},
 	{"QUAT_MI2S_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
+/* [AUDIO]-ADD BEGIN by fu.yu,2015-12-17,Task-1175992,for smart PA from L */
+	{"QUAT_MI2S_RX Port Mixer", "TERT_MI2S_TX", "TERT_MI2S_TX"},
+/* [AUDIO]-ADD END by fu.yu,2015-12-17 */
 	{"QUAT_MI2S_RX", NULL, "QUAT_MI2S_RX Port Mixer"},
 
 	/* Backend Enablement */

@@ -266,7 +266,11 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 
 static struct led_classdev backlight_led = {
 	.name           = "lcd-backlight",
+	#ifdef CONFIG_TCT_8X16_IDOL347
+	.brightness		= MDSS_MAX_BL_BRIGHTNESS / 2,
+	#else
 	.brightness     = MDSS_MAX_BL_BRIGHTNESS,
+	#endif
 	.brightness_set = mdss_fb_set_bl_brightness,
 	.max_brightness = MDSS_MAX_BL_BRIGHTNESS,
 };
@@ -782,11 +786,24 @@ static int mdss_fb_probe(struct platform_device *pdev)
 	mfd->mdp_fb_page_protection = MDP_FB_PAGE_PROTECTION_WRITECOMBINE;
 
 	mfd->ext_ad_ctrl = -1;
+
+#ifdef CONFIG_TCT_8X16_IDOL347
+	if (mfd->panel_info && mfd->panel_info->brightness_max > 0)
+		MDSS_BRIGHT_TO_BL(mfd->bl_level,
+			backlight_led.brightness, mfd->panel_info->bl_max,
+			mfd->panel_info->brightness_max);
+	else
+#endif
 	mfd->bl_level = 0;
+
 	mfd->bl_scale = 1024;
 	mfd->bl_min_lvl = 30;
 	mfd->ad_bl_level = 0;
 	mfd->fb_imgType = MDP_RGBA_8888;
+
+#ifdef CONFIG_TCT_8X16_IDOL347
+	mfd->calib_mode_bl = 0;
+#endif
 
 	if (mfd->panel.type == MIPI_VIDEO_PANEL ||
 				mfd->panel.type == MIPI_CMD_PANEL) {
@@ -1150,6 +1167,8 @@ static void mdss_fb_scale_bl(struct msm_fb_data_type *mfd, u32 *bl_lvl)
 	(*bl_lvl) = temp;
 }
 
+extern bool alarm_boot;
+
 /* must call this function from within mfd->bl_lock */
 void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 {
@@ -1166,7 +1185,7 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 
 	if ((((mdss_fb_is_power_off(mfd) && mfd->dcm_state != DCM_ENTER)
 		|| !mfd->bl_updated) && !IS_CALIB_MODE_BL(mfd)) ||
-		mfd->panel_info->cont_splash_enabled) {
+		(!alarm_boot && (mfd->panel_info->cont_splash_enabled))) {
 		mfd->unset_bl_level = bkl_lvl;
 		return;
 	} else {
@@ -1189,13 +1208,21 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 		 * as well as setting bl_level to bkl_lvl even though the
 		 * backlight has been set to the scaled value.
 		 */
+		#ifdef CONFIG_TCT_8X16_IDOL347
+		if (mfd->bl_level_scaled == temp) {
+		#else
 		if (mfd->bl_level_old == temp) {
+		#endif
 			mfd->bl_level = bkl_lvl;
 		} else {
 			pr_debug("backlight sent to panel :%d\n", temp);
 			pdata->set_backlight(pdata, temp);
 			mfd->bl_level = bkl_lvl;
+			#ifdef CONFIG_TCT_8X16_IDOL347
+			mfd->bl_level_scaled = temp;
+			#else
 			mfd->bl_level_old = temp;
+			#endif
 			bl_notify_needed = true;
 		}
 		if (bl_notify_needed)
@@ -1223,7 +1250,11 @@ void mdss_fb_update_backlight(struct msm_fb_data_type *mfd)
 			if (!IS_CALIB_MODE_BL(mfd))
 				mdss_fb_scale_bl(mfd, &temp);
 			pdata->set_backlight(pdata, temp);
+			#ifdef CONFIG_TCT_8X16_IDOL347
+			mfd->bl_level_scaled = mfd->unset_bl_level;
+			#else
 			mfd->bl_level_old = mfd->unset_bl_level;
+			#endif
 			mfd->bl_updated = 1;
 			mdss_fb_bl_update_notify(mfd);
 		}
@@ -1324,12 +1355,18 @@ static int mdss_fb_blank_blank(struct msm_fb_data_type *mfd,
 
 	mfd->op_enable = false;
 	if (mdss_panel_is_power_off(req_power_state)) {
+	#ifdef CONFIG_TCT_8X16_IDOL347
+		int current_bl = mfd->bl_level;
+	#endif
 		/* Stop Display thread */
 		if (mfd->disp_thread)
 			mdss_fb_stop_disp_thread(mfd);
 		mutex_lock(&mfd->bl_lock);
 		mdss_fb_set_backlight(mfd, 0);
 		mfd->bl_updated = 0;
+	#ifdef CONFIG_TCT_8X16_IDOL347
+		mfd->unset_bl_level = current_bl;
+	#endif
 		mutex_unlock(&mfd->bl_lock);
 	}
 	mfd->panel_power_state = req_power_state;
@@ -1391,6 +1428,27 @@ static int mdss_fb_blank_unblank(struct msm_fb_data_type *mfd)
 			schedule_delayed_work(&mfd->idle_notify_work,
 				msecs_to_jiffies(mfd->idle_time));
 	}
+
+	#ifdef CONFIG_TCT_8X16_IDOL347
+		/* Reset the backlight only if the panel was off */
+		if (mdss_panel_is_power_off(cur_power_state)) {
+			mutex_lock(&mfd->bl_lock);
+			if (!mfd->bl_updated) {
+				mfd->bl_updated = 1;
+		/*
+		* If in AD calibration mode then frameworks would not
+		* be allowed to update backlight hence post unblank
+		* the backlight would remain 0 (0 is set in blank).
+		* Hence resetting back to calibration mode value
+		*/
+			if (IS_CALIB_MODE_BL(mfd))
+				mdss_fb_set_backlight(mfd, mfd->calib_mode_bl);
+			else if (!mfd->panel_info->mipi.post_init_delay)
+				mdss_fb_set_backlight(mfd, mfd->unset_bl_level);
+			}
+			mutex_unlock(&mfd->bl_lock);
+		}
+	#endif
 error:
 	return ret;
 }
@@ -2211,8 +2269,11 @@ static int mdss_fb_open(struct fb_info *info, int user)
 	struct task_struct *task = current->group_leader;
 
 	if (mfd->shutdown_pending) {
-		pr_err("Shutdown pending. Aborting operation. Request from pid:%d name=%s\n",
+		/* MODIFIED-BEGIN by jianeng.yuan, 2016-05-17,BUG-2014903*/
+		pr_err_once("Shutdown pending. Aborting operation. Request from pid:%d name=%s\n",
 				pid, task->comm);
+		sysfs_notify(&mfd->fbi->dev->kobj, NULL, "show_blank_event");
+		/* MODIFIED-END by jianeng.yuan,BUG-2014903*/
 		return -EPERM;
 	}
 
@@ -2290,8 +2351,10 @@ static int mdss_fb_release_all(struct fb_info *info, bool release_all)
 	struct task_struct *task = current->group_leader;
 
 	if (!mfd->ref_cnt) {
-		pr_info("try to close unopened fb %d! from %s\n", mfd->index,
-			task->comm);
+		/* MODIFIED-BEGIN by jianeng.yuan, 2016-05-17,BUG-2014903*/
+		pr_info("try to close unopened fb %d! from pid:%d name:%s\n",
+			mfd->index, pid, task->comm);
+			/* MODIFIED-END by jianeng.yuan,BUG-2014903*/
 		return -EINVAL;
 	}
 

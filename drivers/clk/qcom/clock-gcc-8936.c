@@ -332,6 +332,51 @@ static void __iomem *virt_dbgbase;
 			| BVAL(10, 8, s##_source_val), \
 	}
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.YJ, 2014/12/25, flash enable use gp_clk */
+#if defined(CONFIG_TCT_8X16_IDOL3)
+#define F0(f, s, div, m, n) \
+	{ \
+		.freq_hz = (f), \
+		.src_clk = &s.c, \
+		.m_val = (m), \
+		.n_val = ~((n)-(m)) * !!(n), \
+		.d_val = ~(n)+40,\
+		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
+			| BVAL(10, 8, s##_source_val), \
+	}
+#define F1(f, s, div, m, n) \
+	{ \
+		.freq_hz = (f), \
+		.src_clk = &s.c, \
+		.m_val = (m), \
+		.n_val = ~((n)-(m)) * !!(n), \
+		.d_val = ~(n)+20,\
+		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
+			| BVAL(10, 8, s##_source_val), \
+	}
+#define F2(f, s, div, m, n) \
+	{ \
+		.freq_hz = (f), \
+		.src_clk = &s.c, \
+		.m_val = (m), \
+		.n_val = ~((n)-(m)) * !!(n), \
+		.d_val = ~(n),\
+		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
+			| BVAL(10, 8, s##_source_val), \
+	}
+#define F3(f, s, div, m, n) \
+	{ \
+		.freq_hz = (f), \
+		.src_clk = &s.c, \
+		.m_val = (m), \
+		.n_val = ~((n)-(m)) * !!(n), \
+		.d_val = ~(n)-20,\
+		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
+			| BVAL(10, 8, s##_source_val), \
+	}
+#endif
+/* [PLATFORM]-Add-END by TCTNB.YJ, 2014/12/25 */
+
 #define F_APCS_PLL(f, l, m, n, pre_div, post_div, vco) \
 	{ \
 		.freq_hz = (f), \
@@ -1109,11 +1154,19 @@ static struct rcg_clk cci_clk_src = {
 	},
 };
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.YJ, 2014/12/25, flash enable use gp_clk */
 static struct clk_freq_tbl ftbl_gcc_camss_gp0_1_clk[] = {
 	F( 100000000,	   gpll0_out_main,   8,	  0,	0),
 	F( 200000000,	   gpll0_out_main,   4,	  0,	0),
+#if defined(CONFIG_TCT_8X16_IDOL3)
+	F0( 24000,  		gcc_xo, 	16,   1, 50),
+	F1( 24001, 		gcc_xo, 	16,   1, 50),
+	F2( 24002, 		gcc_xo, 	16,   1, 50),
+	F3( 24003, 		gcc_xo, 	16,   1, 50),
+#endif
 	F_END
 };
+/* [PLATFORM]-Mod-END by TCTNB.YJ, 2014/12/25 */
 
 static struct rcg_clk camss_gp0_clk_src = {
 	.cmd_rcgr_reg = CAMSS_GP0_CMD_RCGR,
@@ -1558,7 +1611,7 @@ static struct rcg_clk usb_hs_system_clk_src = {
 	.c = {
 		.dbg_name = "usb_hs_system_clk_src",
 		.ops = &clk_ops_rcg,
-		VDD_DIG_FMAX_MAP2(LOW, 57140000, NOMINAL, 100000000),
+		VDD_DIG_FMAX_MAP2(LOW, 57140000, NOMINAL, 80000000),
 		CLK_INIT(usb_hs_system_clk_src.c),
 	},
 };

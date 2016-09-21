@@ -574,6 +574,11 @@ config SND_SOC_TPA6130A2
 config SND_SOC_MSM_STUB
 	tristate
 
+#[AUDIO]-ADD BEGIN by fu.yu,2015-12-17,Task-1175997,for tfa PA and akm DAC from L
+config SND_SOC_IDOL347
+	bool "IDOL347 support tfa PA and akm DAC"
+#[AUDIO]-ADD END by fu.yu,2015-12-17
+
 config SND_SOC_MSM_HDMI_CODEC_RX
 	bool "HDMI Audio Playback"
 	depends on FB_MSM_MDSS_HDMI_PANEL && (SND_SOC_MSM8974 || SND_SOC_APQ8084 || SND_SOC_MSM8994)

@@ -1209,6 +1209,10 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 	if (mdss_mdp_ctl_is_power_on(ctl)) {
 		if (!mdp5_data->mdata->batfet)
 			mdss_mdp_batfet_ctrl(mdp5_data->mdata, true);
+#if !defined(CONFIG_TCT_8X16_IDOL3) && !defined(CONFIG_TCT_8X16_M823_ORANGE)
+		mdss_mdp_release_splash_pipe(mfd);
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY*/
 		return 0;
 	} else if (mfd->panel_info->cont_splash_enabled) {
 		mutex_lock(&mdp5_data->list_lock);
@@ -1449,18 +1453,34 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 	ret = mdss_mdp_overlay_start(mfd);
 	if (ret) {
 		pr_err("unable to start overlay %d (%d)\n", mfd->index, ret);
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, PR-789023, 2014/11/20*/
+#if !defined(CONFIG_TCT_8X16_IDOL3) && !defined(CONFIG_TCT_8X16_M823_ORANGE)
+		mutex_unlock(&mdp5_data->ov_lock);
+		if (ctl->shared_lock)
+			mutex_unlock(ctl->shared_lock);
+		return ret;
+#else
 		goto unlock_exit;
 	}
 
 	if (!mdss_mdp_ctl_is_power_on(ctl)) {
 		pr_debug("ctl is not powerd on. skip kickoff\n");
 		goto unlock_exit;
+#endif
 	}
 
 	ret = mdss_iommu_ctrl(1);
 	if (IS_ERR_VALUE(ret)) {
 		pr_err("iommu attach failed rc=%d\n", ret);
+#if !defined(CONFIG_TCT_8X16_IDOL3) && !defined(CONFIG_TCT_8X16_M823_ORANGE)
+		mutex_unlock(&mdp5_data->ov_lock);
+		if (ctl->shared_lock)
+			mutex_unlock(ctl->shared_lock);
+		return ret;
+#else
 		goto unlock_exit;
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY*/
 	}
 	mutex_lock(&mdp5_data->list_lock);
 
@@ -1586,11 +1606,18 @@ commit_fail:
 	if (!mdp5_data->kickoff_released)
 		mdss_mdp_ctl_notify(ctl, MDP_NOTIFY_FRAME_CTX_DONE);
 
+/* [PLATFORM]-Mod-BEGIN by TCTNB.CY, PR-789023, 2014/11/20*/
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_M823_ORANGE)
 	mdss_iommu_ctrl(0);
 unlock_exit:
+#endif
 	mutex_unlock(&mdp5_data->ov_lock);
 	if (ctl->shared_lock)
 		mutex_unlock(ctl->shared_lock);
+#if !defined(CONFIG_TCT_8X16_IDOL3) && !defined(CONFIG_TCT_8X16_M823_ORANGE)
+	mdss_iommu_ctrl(0);
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.CY*/
 	ATRACE_END(__func__);
 
 	return ret;

@@ -380,15 +380,28 @@ void mdss_dsi_host_init(struct mdss_panel_data *pdata)
 	data = 0;
 	if (pinfo->rx_eot_ignore)
 		data |= BIT(4);
+
+#ifdef CONFIG_TCT_8X16_IDOL347
+           pinfo->tx_eot_append = 1;  //Set LCD panel EOT packet in kernel by ChangShengBao
+#endif
 	if (pinfo->tx_eot_append)
 		data |= BIT(0);
 	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x00cc,
 				data); /* DSI_EOT_PACKET_CTRL */
+#ifdef CONFIG_TCT_8X16_IDOL347
+        MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x00bc,
+				0x3fd08); /* DSI_HS_TIMER_CTRL */
+#endif
 
 
 	/* allow only ack-err-status  to generate interrupt */
 	/* DSI_ERR_INT_MASK0 */
+#ifdef CONFIG_TCT_8X16_IDOL347
 	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x010c, 0x03f03fc0);
+#else
+        MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x010c, 0x03f03fe0);
+#endif
+	
 
 	intr_ctrl |= DSI_INTR_ERROR_MASK;
 	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x0110,
@@ -971,8 +984,22 @@ static int mdss_dsi_read_status(struct mdss_dsi_ctrl_pdata *ctrl)
 
 	return mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
+#ifdef CONFIG_TCT_8X16_IDOL347
+static int mdss_dsi_read_status_for_one(struct mdss_dsi_ctrl_pdata *ctrl)
+{
+	struct dcs_cmd_req cmdreq_for_one;
 
+	memset(&cmdreq_for_one, 0, sizeof(cmdreq_for_one));
+	cmdreq_for_one.cmds = ctrl->status_cmds_for_one.cmds;
+	cmdreq_for_one.cmds_cnt = ctrl->status_cmds_for_one.cmd_cnt;
+	cmdreq_for_one.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL | CMD_REQ_RX;
+	cmdreq_for_one.rlen = ctrl->status_cmds_rlen_for_one;
+	cmdreq_for_one.cb = NULL;
+	cmdreq_for_one.rbuf = ctrl->status_buf.data;
 
+	return mdss_dsi_cmdlist_put(ctrl, &cmdreq_for_one);
+}
+#endif
 /**
  * mdss_dsi_reg_status_check() - Check dsi panel status through reg read
  * @ctrl_pdata: pointer to the dsi controller structure
@@ -1020,6 +1047,63 @@ int mdss_dsi_reg_status_check(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 
 	return ret;
 }
+
+#ifdef CONFIG_TCT_8X16_IDOL347
+int mdss_dsi_hx8394d_reg_status_check(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
+{
+	int ret = 0;
+
+	if (ctrl_pdata == NULL) {
+		pr_err("%s: Invalid input data\n", __func__);
+		return 0;
+	}
+
+	pr_debug("%s: Checking Register status\n", __func__);
+
+	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 1);
+
+	if (ctrl_pdata->status_cmds.link_state == DSI_HS_MODE)
+		mdss_dsi_set_tx_power_mode(0, &ctrl_pdata->panel_data);
+
+	ret = mdss_dsi_read_status(ctrl_pdata);
+
+	if (ctrl_pdata->status_cmds.link_state == DSI_HS_MODE)
+		mdss_dsi_set_tx_power_mode(1, &ctrl_pdata->panel_data);
+
+	/*
+	 * mdss_dsi_read_status returns the number of bytes returned
+	 * by the panel. Success value is greater than zero and failure
+	 * case returns zero.
+	 */
+	if (ret > 0) {
+		ret = ctrl_pdata->check_read_status(ctrl_pdata);
+	} else {
+		pr_err("%s: Read status register returned error\n", __func__);
+	}
+
+
+	if(ret > 0)
+	{
+	       if (ctrl_pdata->status_cmds.link_state == DSI_HS_MODE)
+		     mdss_dsi_set_tx_power_mode(0, &ctrl_pdata->panel_data);
+
+	       ret = mdss_dsi_read_status_for_one(ctrl_pdata);
+
+	       if (ctrl_pdata->status_cmds.link_state == DSI_HS_MODE)
+		     mdss_dsi_set_tx_power_mode(1, &ctrl_pdata->panel_data);
+
+	       if (ret > 0) {
+		     ret = ctrl_pdata->check_read_status_for_one(ctrl_pdata);
+	       } else {
+		     pr_err("%s: Read status register returned error\n", __func__);
+	       }
+	}
+	mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 0);
+	pr_debug("%s: Read register done with ret: %d\n", __func__, ret);
+
+	return ret;
+}
+#endif
 
 static void mdss_dsi_mode_setup(struct mdss_panel_data *pdata)
 {

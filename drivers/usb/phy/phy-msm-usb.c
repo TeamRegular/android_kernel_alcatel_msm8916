@@ -52,6 +52,13 @@
 
 #include <linux/msm-bus.h>
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.FLF, PR-829728, 2014/11/12, fix not light up when plug out usb */
+#ifdef CONFIG_TCT_8X16_COMMON
+#include <linux/wakelock.h>
+static struct wake_lock notify_usb_wake_lock;
+#endif
+/* [PLATFORM]-Add-END by TCTNB.FLF */
+
 #define MSM_USB_BASE	(motg->regs)
 #define MSM_USB_PHY_CSR_BASE (motg->phy_csr_regs)
 
@@ -101,7 +108,7 @@ MODULE_PARM_DESC(floated_charger_enable,
 	"Whether to enable floated charger");
 
 /* by default debugging is enabled */
-static unsigned int enable_dbg_log = 1;
+static unsigned int enable_dbg_log = 0;//1; [BUGFIX] BY TCTNJ Jianeng.Yuan,03/09/2016,Defect-1662560
 module_param(enable_dbg_log, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(enable_dbg_log, "Debug buffer events");
 
@@ -157,6 +164,18 @@ msm_otg_dbg_log_event(struct usb_phy *phy, char *event, int d1, int d2)
 	motg->dbg_idx = motg->dbg_idx % DEBUG_MAX_MSG;
 	write_unlock_irqrestore(&motg->dbg_lock, flags);
 }
+
+#if defined(CONFIG_TCT_8X16_IDOL347)
+unsigned long chg_force_mode = 0;
+static int __init chg_force_setup(char *str)
+{
+	unsigned long force;
+	if (!strict_strtoul(str, 0, &force))
+		chg_force_mode = force ? 1 : 0;
+	return 1;
+}
+__setup("chg_force=", chg_force_setup);
+#endif
 
 static int msm_hsusb_ldo_init(struct msm_otg *motg, int init)
 {
@@ -1847,9 +1866,23 @@ static void msm_otg_notify_host_mode(struct msm_otg *motg, bool host_mode)
 	}
 }
 
+#if defined(CONFIG_TCT_8X16_IDOL347)
+extern void DrvIcFwLyrChargerInput(void);
+extern void DrvIcFwLyrChargerOutput(void);
+extern void ft5x06_disable_change_scanning_frq(void);
+extern void ft5x06_enable_change_scanning_frq(void);
+bool charger_in = false;
+extern bool is_msg2638;
+extern bool is_ft5x06;
+#endif
+
 static int msm_otg_notify_chg_type(struct msm_otg *motg)
 {
 	static int charger_type;
+#if defined(CONFIG_TCT_8X16_IDOL347)
+	int charger_type_last; //furong add
+	charger_type_last = charger_type;
+#endif
 
 	/*
 	 * TODO
@@ -1873,7 +1906,27 @@ static int msm_otg_notify_chg_type(struct msm_otg *motg)
 		charger_type = POWER_SUPPLY_TYPE_USB_ACA;
 	else
 		charger_type = POWER_SUPPLY_TYPE_UNKNOWN;
+#if defined(CONFIG_TCT_8X16_IDOL347)
+	//furong add start 03/10/2014 for TP,
+	if ((charger_type_last == POWER_SUPPLY_TYPE_UNKNOWN) && ((charger_type == POWER_SUPPLY_TYPE_USB_DCP) || (charger_type == POWER_SUPPLY_TYPE_USB))) { // charger plug in
+		pr_debug("[Fu]%s AC or USB charger in \n", __func__);
+		charger_in = true;
+		if (is_msg2638 == true)
+			DrvIcFwLyrChargerInput();
+		else if (is_ft5x06 == true)
+			ft5x06_enable_change_scanning_frq();
+	}
 
+	if (((charger_type_last == POWER_SUPPLY_TYPE_USB_DCP) || (charger_type_last == POWER_SUPPLY_TYPE_USB))&& (charger_type == POWER_SUPPLY_TYPE_UNKNOWN)) {// charger plug out
+		pr_debug("[Fu]%s AC or USB charger out\n", __func__);
+		charger_in = false;
+		if (is_msg2638 == true)
+			DrvIcFwLyrChargerOutput();
+		else if (is_ft5x06 == true)
+			ft5x06_disable_change_scanning_frq();
+	}
+	//furong add end 03/10/2014 for TP
+#endif
 	if (!psy) {
 		pr_err("No USB power supply registered!\n");
 		return -EINVAL;
@@ -1975,6 +2028,12 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned mA)
 		pm8921_charger_vbus_draw(mA);
 
 	motg->cur_power = mA;
+
+/* [PLATFORM]-Add-BEGIN by TCTNB.FLF, PR-829728, 2014/11/12, fix not light up when plug out usb */
+#ifdef CONFIG_TCT_8X16_COMMON
+	wake_lock_timeout(&notify_usb_wake_lock, 1 * HZ);
+#endif
+/* [PLATFORM]-Add-END by TCTNB.FLF */
 }
 
 static int msm_otg_set_power(struct usb_phy *phy, unsigned mA)
@@ -2900,6 +2959,17 @@ static const char *chg_to_string(enum usb_chg_type chg_type)
 	}
 }
 
+/* [PLATFORM]-Mod-BEGIN by TCTNB.FLF, FR-813874, 2014/10/21, float charge detect */
+#ifdef CONFIG_TCT_8X16_COMMON
+static void carkit_detect_work(struct work_struct *w)
+{
+    struct msm_otg *motg = container_of(w, struct msm_otg, carkit_detect.work);
+    pr_debug("msm_otg: detect a carkit charger.\n");
+    msm_otg_notify_charger(motg, 500);
+}
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.FLF */
+
 #define MSM_CHG_DCD_TIMEOUT		(750 * HZ/1000) /* 750 msec */
 #define MSM_CHG_DCD_POLL_TIME		(50 * HZ/1000) /* 50 msec */
 #define MSM_CHG_PRIMARY_DET_TIME	(50 * HZ/1000) /* TVDPSRC_ON */
@@ -2911,6 +2981,9 @@ static void msm_chg_detect_work(struct work_struct *w)
 	bool is_dcd = false, tmout, vout, is_aca;
 	static bool dcd;
 	u32 line_state, dm_vlgc;
+#if defined(CONFIG_TCT_8X16_IDOL347) || defined(CONFIG_TCT_8X16_M823_ORANGE)
+	u32 func_ctrl; //JRD BSP eric.gong "QC patch:Disable QC2.0 sw entry"
+#endif
 	unsigned long delay;
 
 	dev_dbg(phy->dev, "chg detection work\n");
@@ -3041,9 +3114,21 @@ static void msm_chg_detect_work(struct work_struct *w)
 			udelay(100);
 		msm_chg_enable_aca_intr(motg);
 
+/*JRD BSP START eric.gong "QC patch:Disable QC2.0 sw entry"*/
+#if defined(CONFIG_TCT_8X16_IDOL347) || defined(CONFIG_TCT_8X16_M823_ORANGE)
+		/* put the controller in non-driving mode */
+		if (motg->chg_type == USB_DCP_CHARGER){
+			func_ctrl = ulpi_read(phy, ULPI_FUNC_CTRL);
+			func_ctrl &= ~ULPI_FUNC_CTRL_OPMODE_MASK;
+			func_ctrl |= ULPI_FUNC_CTRL_OPMODE_NONDRIVING;
+			ulpi_write(phy, func_ctrl, ULPI_FUNC_CTRL);
+		}
+#else
 		/* Enable VDP_SRC in case of DCP charger */
 		if (motg->chg_type == USB_DCP_CHARGER)
 			ulpi_write(phy, 0x2, 0x85);
+#endif
+/*JRD BSP END eric.gong "QC patch:Disable QC2.0 sw entry"*/
 
 		dev_dbg(phy->dev, "chg_type = %s\n",
 			chg_to_string(motg->chg_type));
@@ -3332,6 +3417,11 @@ static void msm_otg_sm_work(struct work_struct *w)
 						OTG_STATE_B_PERIPHERAL;
 					mod_timer(&motg->chg_check_timer,
 							CHG_RECHECK_DELAY);
+/* [PLATFORM]-Mod-BEGIN by TCTNB.FLF, FR-813874, 2014/10/21, float charge detect */
+#ifdef CONFIG_TCT_8X16_COMMON
+					schedule_delayed_work(&motg->carkit_detect,msecs_to_jiffies(2500));
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.FLF */
 					break;
 				default:
 					break;
@@ -4151,6 +4241,11 @@ static irqreturn_t msm_otg_irq(int irq, void *data)
 	return ret;
 }
 
+#if defined(CONFIG_TCT_8X16_IDOL3)
+extern void  ft5x06_enable_change_scanning_frq(void);
+extern void ft5x06_disable_change_scanning_frq(void);
+#endif
+
 static void msm_otg_set_vbus_state(int online)
 {
 	struct msm_otg *motg = the_msm_otg;
@@ -4160,12 +4255,18 @@ static void msm_otg_set_vbus_state(int online)
 		pr_debug("PMIC: BSV set\n");
 		msm_otg_dbg_log_event(&motg->phy, "PMIC: BSV SET",
 				init, motg->inputs);
+#if defined(CONFIG_TCT_8X16_IDOL3)
+		ft5x06_enable_change_scanning_frq();
+#endif
 		if (test_and_set_bit(B_SESS_VLD, &motg->inputs) && init)
 			return;
 	} else {
 		pr_debug("PMIC: BSV clear\n");
 		msm_otg_dbg_log_event(&motg->phy, "PMIC: BSV CLEAR",
 				init, motg->inputs);
+#if defined(CONFIG_TCT_8X16_IDOL3)
+		ft5x06_disable_change_scanning_frq();
+#endif
 		if (!test_and_clear_bit(B_SESS_VLD, &motg->inputs) && init)
 			return;
 	}
@@ -5226,6 +5327,13 @@ struct msm_otg_platform_data *msm_otg_dt_to_pdata(struct platform_device *pdev)
 				&pdata->power_budget);
 	of_property_read_u32(node, "qcom,hsusb-otg-mode",
 				&pdata->mode);
+#if defined(CONFIG_TCT_8X16_IDOL347)
+	if(chg_force_mode) {
+		pdata->mode = USB_PERIPHERAL;
+		pr_warn("[Liu]%s: chg_force mode, set peripheral only mode\n", __func__);
+	}
+#endif
+
 	of_property_read_u32(node, "qcom,hsusb-otg-otg-control",
 				&pdata->otg_control);
 	of_property_read_u32(node, "qcom,hsusb-otg-default-mode",
@@ -5313,6 +5421,11 @@ static int msm_otg_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.FLF, PR-829728, 2014/11/12, fix not light up when plug out usb */
+#ifdef CONFIG_TCT_8X16_COMMON
+	wake_lock_init(&notify_usb_wake_lock, WAKE_LOCK_SUSPEND, "notify_usb");
+#endif
+/* [PLATFORM]-Add-END by TCTNB.FLF */
 	/*
 	 * USB Core is running its protocol engine based on CORE CLK,
 	 * CORE CLK  must be running at >55Mhz for correct HSUSB
@@ -5690,6 +5803,11 @@ static int msm_otg_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&motg->chg_work, msm_chg_detect_work);
 	INIT_DELAYED_WORK(&motg->id_status_work, msm_id_status_w);
 	INIT_DELAYED_WORK(&motg->suspend_work, msm_otg_suspend_work);
+/* [PLATFORM]-Mod-BEGIN by TCTNB.FLF, FR-813874, 2014/10/21, float charge detect */
+#ifdef CONFIG_TCT_8X16_COMMON
+	INIT_DELAYED_WORK(&motg->carkit_detect, carkit_detect_work);
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.FLF */
 	setup_timer(&motg->id_timer, msm_otg_id_timer_func,
 				(unsigned long) motg);
 	setup_timer(&motg->chg_check_timer, msm_otg_chg_check_timer_func,
@@ -6021,6 +6139,11 @@ static int msm_otg_remove(struct platform_device *pdev)
 	if (phy->otg->host || phy->otg->gadget)
 		return -EBUSY;
 
+/* [PLATFORM]-Add-BEGIN by TCTNB.FLF, PR-829728, 2014/11/12, fix not light up when plug out usb */
+#ifdef CONFIG_TCT_8X16_COMMON
+	wake_lock_destroy(&notify_usb_wake_lock);
+#endif
+/* [PLATFORM]-Add-END by TCTNB.FLF */
 	unregister_pm_notifier(&motg->pm_notify);
 
 	if (!motg->ext_chg_device) {
@@ -6041,6 +6164,11 @@ static int msm_otg_remove(struct platform_device *pdev)
 	cancel_delayed_work_sync(&motg->chg_work);
 	cancel_delayed_work_sync(&motg->id_status_work);
 	cancel_delayed_work_sync(&motg->suspend_work);
+/* [PLATFORM]-Mod-BEGIN by TCTNB.FLF, FR-813874, 2014/10/21, float charge detect */
+#ifdef CONFIG_TCT_8X16_COMMON
+	cancel_delayed_work_sync(&motg->carkit_detect);
+#endif
+/* [PLATFORM]-Mod-END by TCTNB.FLF */
 	cancel_work_sync(&motg->sm_work);
 	destroy_workqueue(motg->otg_wq);
 

@@ -635,4 +635,8 @@ source "drivers/misc/altera-stapl/Kconfig"
 source "drivers/misc/mei/Kconfig"
 source "drivers/misc/vmw_vmci/Kconfig"
 source "drivers/misc/qcom/Kconfig"
+
+# [PLATFORM]-Mod-BEGIN by huangshenglin@hoperun for task-1191012, 2015/12/21, add sensor driver.
+source "drivers/misc/idol347_sensor/Kconfig"
+# [PLATFORM]-Mod-END by huangshenglin@hoperun
 endmenu

@@ -1,6 +1,6 @@
 /* include/linux/input/kionix_accel.h - Kionix accelerometer driver
  *
- * Copyright (C) 2012-2015 Kionix, Inc.
+ * Copyright (C) 2012-2014 Kionix, Inc.
  * Written by Kuching Tan <kuchingtan@kionix.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * [BUFFIX]-Mod by huangshenglin@hoperun,porting L->M, task-1175888,2015/12/17
  */
 #ifndef __KIONIX_ACCEL_H__
 #define __KIONIX_ACCEL_H__
@@ -26,13 +26,16 @@
 #define KIONIX_VIO_MIN_UV  1750000
 #define KIONIX_VIO_MAX_UV  1950000
 /* Polling delay in msecs */
-#define POLL_INTERVAL_MIN_MS	1
+/*TR961495 modify by ZXZ ,2015/03/28  change POLL_INTERVAL_MIN_MS from 1 to 10 for framwork get data rate*/
+//#define POLL_INTERVAL_MIN_MS	1
+#define POLL_INTERVAL_MIN_MS	10
+
 #define POLL_INTERVAL_MAX_MS	10000
 #define POLL_DEFAULT_INTERVAL_MS 200
 #define KIONIX_ACCEL_MAX_DELAY 1000
 #define KIONIX_ACCEL_MIN_DELAY 1
 
-#define KIONIX_ACCEL_I2C_ADDR		0xe
+#define KIONIX_ACCEL_I2C_ADDR		0x0e
 #define KIONIX_ACCEL_NAME			"accelerometer"
 #define KIONIX_ACCEL_IRQ			"kionix-irq"
 

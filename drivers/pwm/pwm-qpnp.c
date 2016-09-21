@@ -1571,7 +1571,19 @@ int pwm_config_us(struct pwm_device *pwm, int duty_us, int period_us)
 	spin_lock_irqsave(&chip->lpg_lock, flags);
 
 	if (chip->pwm_config.pwm_period != period_us) {
+/*Start modify backlight flicker when we adjust the brightness By ChangShengBao*/
+              #if (defined CONFIG_TCT_8X16_IDOL347 || defined CONFIG_TCT_8X16_IDOL3 || defined CONFIG_TCT_8X16_M823_ORANGE)	/*TCTNB.CY, PR-891676, modify for backlight blink*/
+		if(0==strcmp(pwm->label,"lcd-bklt"))
+		{
+			chip->pwm_config.period.pwm_size = 9;
+			chip->pwm_config.period.clk = 2;
+			chip->pwm_config.period.pre_div = 0;
+			chip->pwm_config.period.pre_div_exp = 0;
+		}
+                #else
 		qpnp_lpg_calc_period(LVL_USEC, period_us, chip);
+                #endif
+/*End modify backlight flicker when we adjust the brightness By ChangShengBao*/
 		qpnp_lpg_save_period(chip);
 		chip->pwm_config.pwm_period = period_us;
 		if ((unsigned)period_us > (unsigned)(-1) / NSEC_PER_USEC)

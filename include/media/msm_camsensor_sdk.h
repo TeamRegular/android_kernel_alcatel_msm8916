@@ -150,10 +150,14 @@ enum msm_actuator_addr_type {
 	MSM_ACTUATOR_WORD_ADDR,
 };
 
+/* [PLATFORM]-Mod-BEGIN by TCTNB.YJ, add for rear camera on idol3  */
 enum msm_actuator_write_type {
 	MSM_ACTUATOR_WRITE_HW_DAMP,
 	MSM_ACTUATOR_WRITE_DAC,
+	MSM_ACTUATOR_WRITE_AK7348,
+	MSM_ACTUATOR_WRITE_AK7345_v2,
 };
+/* [PLATFORM]-Mod-END by TCTNB.YJ*/
 
 enum msm_actuator_i2c_operation {
 	MSM_ACT_WRITE = 0,

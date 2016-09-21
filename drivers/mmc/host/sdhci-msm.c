@@ -290,6 +290,14 @@ struct sdhci_pinctrl_data {
 	struct pinctrl          *pctrl;
 	struct pinctrl_state    *pins_active;
 	struct pinctrl_state    *pins_sleep;
+/* [PLATFORM] ADD BEGIN by YuBin, 2015-02-13, set gpio56/60 one time for crash issue */
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_M823_ORANGE)
+	struct pinctrl_state    *pins_onetime;
+#endif
+/* [PLATFORM] ADD END by YuBin */
+#if defined(CONFIG_TCT_8X16_IDOL347)
+	struct pinctrl_state    *pins_active_uim_det;
+#endif
 };
 
 struct sdhci_msm_bus_voting_data {
@@ -354,6 +362,9 @@ struct sdhci_msm_host {
 	struct completion pwr_irq_completion;
 	struct sdhci_msm_bus_vote msm_bus_vote;
 	struct device_attribute	polling;
+#if defined(CONFIG_TCT_8X16_IDOL347)
+	struct device_attribute	rescan;
+#endif
 	u32 clk_rate; /* Keeps track of current clock rate that is set */
 	bool tuning_done;
 	bool calibration_done;
@@ -376,6 +387,10 @@ enum vdd_io_level {
 	 */
 	VDD_IO_SET_LEVEL,
 };
+
+#if defined(CONFIG_TCT_8X16_IDOL347)
+extern unsigned long idol347_board_id;
+#endif
 
 /* MSM platform specific tuning */
 static inline int msm_dll_poll_ck_out_en(struct sdhci_host *host,
@@ -1400,20 +1415,64 @@ static int sdhci_msm_parse_pinctrl_info(struct device *dev,
 	}
 	pctrl_data->pctrl = pctrl;
 	/* Look-up and keep the states handy to be used later */
+#if defined(CONFIG_TCT_8X16_IDOL347)
+	if(!(idol347_board_id & BIT(1))) {
+		pctrl_data->pins_active = pinctrl_lookup_state(
+			pctrl_data->pctrl, "active");
+	}
+	else {
+		pctrl_data->pins_active = pinctrl_lookup_state(
+			pctrl_data->pctrl, "active_no_cd");
+	}
+#else
 	pctrl_data->pins_active = pinctrl_lookup_state(
 			pctrl_data->pctrl, "active");
+#endif
 	if (IS_ERR(pctrl_data->pins_active)) {
 		ret = PTR_ERR(pctrl_data->pins_active);
 		dev_err(dev, "Could not get active pinstates, err:%d\n", ret);
 		goto out;
 	}
+#if defined(CONFIG_TCT_8X16_IDOL347)
+	if(!(idol347_board_id & BIT(1))) {
+		pctrl_data->pins_sleep = pinctrl_lookup_state(
+			pctrl_data->pctrl, "sleep");
+	}
+	else {
+		pctrl_data->pins_sleep = pinctrl_lookup_state(
+			pctrl_data->pctrl, "sleep_no_cd");
+	}
+#else
 	pctrl_data->pins_sleep = pinctrl_lookup_state(
 			pctrl_data->pctrl, "sleep");
+#endif
 	if (IS_ERR(pctrl_data->pins_sleep)) {
 		ret = PTR_ERR(pctrl_data->pins_sleep);
 		dev_err(dev, "Could not get sleep pinstates, err:%d\n", ret);
 		goto out;
 	}
+/* [PLATFORM] ADD BEGIN by YuBin, 2015-02-13, set gpio56/60 one time for crash issue */
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_M823_ORANGE)
+	pctrl_data->pins_onetime = pinctrl_lookup_state(
+			pctrl_data->pctrl, "onetime");
+	if (IS_ERR(pctrl_data->pins_onetime)) {
+		ret = PTR_ERR(pctrl_data->pins_onetime);
+		dev_err(dev, "Could not get onetime pinstates, err:%d\n", ret);
+		goto out;
+	}
+#endif
+/* [PLATFORM] ADD END by YuBin */
+#if defined(CONFIG_TCT_8X16_IDOL347)
+	if(!(idol347_board_id & BIT(1))) {
+		pctrl_data->pins_active_uim_det = pinctrl_lookup_state(
+				pctrl_data->pctrl, "active_uim_det");
+		if (IS_ERR(pctrl_data->pins_active_uim_det)) {
+			ret = PTR_ERR(pctrl_data->pins_active_uim_det);
+			dev_err(dev, "Could not get active_uim_det pinstates, err:%d\n", ret);
+			goto out;
+		}
+	}
+#endif
 	pdata->pctrl_data = pctrl_data;
 out:
 	return ret;
@@ -1683,7 +1742,18 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev,
 		goto out;
 	}
 
+#if defined(CONFIG_TCT_8X16_IDOL347)
+	if(!(idol347_board_id & BIT(1))) {
+		dev_info(dev, "[Liu]%s: pio3 or newer board\n", __func__);
+		pdata->status_gpio = of_get_named_gpio_flags(np, "cd-gpios", 0, &flags);
+	}
+	else {
+		dev_info(dev, "[Liu]%s: pio2 or older board\n", __func__);
+		pdata->status_gpio = -EPROBE_DEFER;
+	}
+#else
 	pdata->status_gpio = of_get_named_gpio_flags(np, "cd-gpios", 0, &flags);
+#endif
 	if (gpio_is_valid(pdata->status_gpio) & !(flags & OF_GPIO_ACTIVE_LOW))
 		pdata->caps2 |= MMC_CAP2_CD_ACTIVE_HIGH;
 
@@ -2497,6 +2567,28 @@ store_polling(struct device *dev, struct device_attribute *attr,
 	return count;
 }
 
+#if defined(CONFIG_TCT_8X16_IDOL347)
+static ssize_t
+show_rescan(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", 0);
+}
+
+static ssize_t
+store_rescan(struct device *dev, struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct sdhci_host *host = dev_get_drvdata(dev);
+	int value;
+
+	if (!kstrtou32(buf, 0, &value)) {
+		pr_info("[Liu]%s: value=%d\n", __func__, value);
+		mmc_detect_change(host->mmc, msecs_to_jiffies(value));
+	}
+	return count;
+}
+#endif
+
 static ssize_t
 show_sdhci_max_bus_bw(struct device *dev, struct device_attribute *attr,
 			char *buf)
@@ -3276,6 +3368,39 @@ static void sdhci_set_default_hw_caps(struct sdhci_msm_host *msm_host,
 	writel_relaxed(caps, host->ioaddr + CORE_VENDOR_SPEC_CAPABILITIES0);
 }
 
+#if defined(CONFIG_TCT_8X16_IDOL347)
+static int sd_status_open(struct inode *ip, struct file *fp)
+{
+	return 0;
+}
+static int sd_status_release(struct inode *ip, struct file *fp)
+{
+	return 0;
+}
+static const struct file_operations sd_status_fops = {
+	.owner = THIS_MODULE,
+	.open = sd_status_open,
+	.release = sd_status_release,
+};
+static struct miscdevice sd_status_dev = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "sd_status",
+	.fops = &sd_status_fops,
+};
+void sd_status_report(int status)
+{
+	char sd_status[64] = {0};
+	char *uevent_envp[2] = {NULL, NULL};
+
+	sprintf(sd_status, "SD_STATUS=%d", !!status);
+	pr_err("[Liu]%s: %s\n", __func__, sd_status);
+	uevent_envp[0] = sd_status;
+	kobject_uevent_env(&sd_status_dev.this_device->kobj,
+		KOBJ_CHANGE, uevent_envp);
+}
+EXPORT_SYMBOL(sd_status_report);
+#endif
+
 static int sdhci_msm_probe(struct platform_device *pdev)
 {
 	struct sdhci_host *host;
@@ -3550,6 +3675,20 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 	msm_host->mmc->caps2 |= MMC_CAP2_CORE_RUNTIME_PM;
 	msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR;
 	msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR_CONTROL;
+
+/* [PLATFORM]-Mod-BEGIN by TCTNB.YuBin, 2015/05/05,  tlc emmc issue */
+#if defined(CONFIG_TCT_8X16_IDOL3)||defined(CONFIG_TCT_8X16_M823_ORANGE)
+       if (pdev->dev.of_node) {
+               /* disable packed write for sdhc1 */
+               if (of_alias_get_id(pdev->dev.of_node, "sdhc") == 1) {
+                       msm_host->mmc->caps2 &= ~MMC_CAP2_PACKED_WR;
+                       msm_host->mmc->caps2 &= ~MMC_CAP2_PACKED_WR_CONTROL;
+                       dev_info(&pdev->dev, "packed write diabled.\n");
+               }
+       }
+#endif
+/* [PLATFORM]-Add-END by TCTNB.YuBin */
+
 	msm_host->mmc->caps2 |= (MMC_CAP2_BOOTPART_NOACC |
 				MMC_CAP2_DETECT_ON_ERR);
 	msm_host->mmc->caps2 |= MMC_CAP2_CACHE_CTRL;
@@ -3576,6 +3715,18 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 		 */
 		sdhci_msm_setup_pins(msm_host->pdata, true);
 
+/* [PLATFORM] ADD BEGIN by YuBin, 2015-02-13, set gpio56/60 one time for crash issue */
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_M823_ORANGE)
+		pinctrl_select_state(msm_host->pdata->pctrl_data->pctrl,
+			msm_host->pdata->pctrl_data->pins_onetime);
+#endif
+/* [PLATFORM] ADD END by YuBin */
+#if defined(CONFIG_TCT_8X16_IDOL347)
+		if(!(idol347_board_id & BIT(1))) {
+			pinctrl_select_state(msm_host->pdata->pctrl_data->pctrl,
+				msm_host->pdata->pctrl_data->pins_active_uim_det);
+		}
+#endif
 		ret = mmc_gpio_request_cd(msm_host->mmc,
 				msm_host->pdata->status_gpio);
 		if (ret) {
@@ -3643,6 +3794,15 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 		if (ret)
 			goto remove_max_bus_bw_file;
 	}
+#if defined(CONFIG_TCT_8X16_IDOL347)
+		msm_host->rescan.show = show_rescan;
+		msm_host->rescan.store = store_rescan;
+		msm_host->rescan.attr.name = "rescan";
+		msm_host->rescan.attr.mode = S_IRUGO | S_IWUSR;
+		ret = device_create_file(&pdev->dev, &msm_host->rescan);
+		if (ret)
+			goto remove_max_bus_bw_file;
+#endif
 	ret = pm_runtime_set_active(&pdev->dev);
 	if (ret)
 		pr_err("%s: %s: pm_runtime_set_active failed: err: %d\n",
@@ -3673,6 +3833,17 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 	}
 
 	device_enable_async_suspend(&pdev->dev);
+#if defined(CONFIG_TCT_8X16_IDOL347)
+	if(msm_host->mmc->index == 1) {
+		ret = misc_register(&sd_status_dev);
+		if(ret) {
+			pr_err("%s: ret=%d, sd_status_dev register failed\n",
+			       mmc_hostname(host->mmc), ret);
+			ret = 0;
+		}
+		msm_host->mmc->caps &= ~MMC_CAP_NEEDS_POLL;
+	}
+#endif
 	/* Successful initialization */
 	goto out;
 

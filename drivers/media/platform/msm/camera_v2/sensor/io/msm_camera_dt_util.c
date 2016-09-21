@@ -21,6 +21,11 @@
 
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
+//[BUG_FIX]-Add-BEGIN by TCTSZ. Zkx, 2014/07/01, fixed repeat pinctrl_select_state request gpio but not relese
+#ifdef CONFIG_TCT_8X16_POP10
+extern int pinctrl_select_state_camera(struct pinctrl *p, struct pinctrl_state *state);
+#endif
+//[BUG_FIX]-Add-END by TCTSZ. Zkx,
 
 int msm_camera_fill_vreg_params(struct camera_vreg_t *cam_vreg,
 	int num_vreg, struct msm_sensor_power_setting *power_setting,
@@ -1245,8 +1250,16 @@ int msm_camera_power_up(struct msm_camera_power_ctrl_t *ctrl,
 	if (rc < 0)
 		no_gpio = rc;
 	if (ctrl->cam_pinctrl_status) {
+//[BUG_FIX]-Add-BEGIN by TCTSZ. Zkx, 2014/07/01, fixed repeat pinctrl_select_state request gpio but not relese
+#ifdef CONFIG_TCT_8X16_POP10
+		ret = pinctrl_select_state_camera(ctrl->pinctrl_info.pinctrl,
+				ctrl->pinctrl_info.gpio_state_active);
+#else
 		ret = pinctrl_select_state(ctrl->pinctrl_info.pinctrl,
 			ctrl->pinctrl_info.gpio_state_active);
+#endif
+//[BUG_FIX]-Add-END by TCTSZ. Zkx,
+
 		if (ret)
 			pr_err("%s:%d cannot set pin to active state",
 				__func__, __LINE__);
@@ -1296,6 +1309,22 @@ int msm_camera_power_up(struct msm_camera_power_ctrl_t *ctrl,
 			CDBG("%s:%d gpio set val %d\n", __func__, __LINE__,
 				ctrl->gpio_conf->gpio_num_info->gpio_num
 				[power_setting->seq_val]);
+			/*[BUGFIX]-BEGIN  Add by TCTSH.GYC,PR-912639 2015/01/23,reset front camera reset pin when open main camera*/
+			//printk("gyc    sensor_gpio    %s:%d    gpio = %d\n",__func__,__LINE__,ctrl->gpio_conf->gpio_num_info->gpio_num
+				//[power_setting->seq_val]);
+#ifdef CONFIG_TCT_8X16_IDOL347
+			if(ctrl->gpio_conf->gpio_num_info->gpio_num
+				[power_setting->seq_val] == 936)
+				{
+				gpio_set_value_cansleep(
+				930,1);
+				msleep(10);
+				gpio_set_value_cansleep(
+				930,0);
+				}
+#endif
+			/*[BUGFIX]-END Add by TCTSH.GYC,PR-912639 2015/01/23*/
+
 			gpio_set_value_cansleep(
 				ctrl->gpio_conf->gpio_num_info->gpio_num
 				[power_setting->seq_val],
@@ -1399,8 +1428,16 @@ power_up_failed:
 		}
 	}
 	if (ctrl->cam_pinctrl_status) {
+//[BUG_FIX]-Add-BEGIN by TCTSZ. Zkx, 2014/07/01, fixed repeat pinctrl_select_state request gpio but not relese
+#ifdef CONFIG_TCT_8X16_POP10
+		ret = pinctrl_select_state_camera(ctrl->pinctrl_info.pinctrl,
+				ctrl->pinctrl_info.gpio_state_suspend);
+#else
 		ret = pinctrl_select_state(ctrl->pinctrl_info.pinctrl,
 				ctrl->pinctrl_info.gpio_state_suspend);
+#endif
+//[BUG_FIX]-Add-END by TCTSZ. Zkx,
+
 		if (ret)
 			pr_err("%s:%d cannot set pin to suspend state\n",
 				__func__, __LINE__);
@@ -1530,12 +1567,27 @@ int msm_camera_power_down(struct msm_camera_power_ctrl_t *ctrl,
 		}
 	}
 	if (ctrl->cam_pinctrl_status) {
+//[BUG_FIX]-Add-BEGIN by TCTSZ. Zkx, 2014/07/01, fixed repeat pinctrl_select_state request gpio but not relese
+#ifdef CONFIG_TCT_8X16_POP10
+		ret = pinctrl_select_state_camera(ctrl->pinctrl_info.pinctrl,
+					ctrl->pinctrl_info.gpio_state_suspend);
+#else
 		ret = pinctrl_select_state(ctrl->pinctrl_info.pinctrl,
 				ctrl->pinctrl_info.gpio_state_suspend);
+				
+#endif
+		//ret = pinctrl_select_state(ctrl->pinctrl_info.pinctrl,
+		//		ctrl->pinctrl_info.gpio_state_suspend);
 		if (ret)
 			pr_err("%s:%d cannot set pin to suspend state",
 				__func__, __LINE__);
+
+//[BUG_FIX]-Add-BEGIN by TCTSZ. Zkx, 2014/07/01, release pinctrl or other camera can't probe sucess
+#ifdef CONFIG_TCT_8X16_POP10
+#else
 		devm_pinctrl_put(ctrl->pinctrl_info.pinctrl);
+#endif
+//[BUG_FIX]-Add-END by TCTSZ. Zkx,
 	}
 	ctrl->cam_pinctrl_status = 0;
 	msm_camera_request_gpio_table(

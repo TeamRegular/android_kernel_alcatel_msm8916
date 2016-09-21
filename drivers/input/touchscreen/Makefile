@@ -75,12 +75,34 @@ obj-$(CONFIG_TOUCHSCREEN_WM97XX_MAINSTONE)	+= mainstone-wm97xx.o
 obj-$(CONFIG_TOUCHSCREEN_WM97XX_ZYLONITE)	+= zylonite-wm97xx.o
 obj-$(CONFIG_TOUCHSCREEN_W90X900)	+= w90p910_ts.o
 obj-$(CONFIG_TOUCHSCREEN_TPS6507X)	+= tps6507x-ts.o
+ifndef CONFIG_TCT_8X16_COMMON
 obj-$(CONFIG_TOUCHSCREEN_FT5X06)	+= ft5x06_ts.o
+endif
 obj-$(CONFIG_TOUCHSCREEN_MSTAR21XX)	+= msg21xx_ts.o
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_DEV)	+= synaptics_rmi_dev.o
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE) 	+= synaptics_fw_update.o
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI4)		+= synaptics_i2c_rmi4.o
+ifdef CONFIG_TCT_8X16_COMMON 
+obj-$(CONFIG_TCT_8X16_ALTO45_LATAM_B28)	+= tp_tct/
+obj-$(CONFIG_TCT_8X16_ALTO45_LATAM_B28)		+= gt9xx_v2/
+else
 obj-$(CONFIG_TOUCHSCREEN_GT9XX)		+= gt9xx/
+endif
+ifdef CONFIG_TCT_8X16_IDOL347
+obj-$(CONFIG_TOUCHSCREEN_FT5436_IDOL347)	+= ft5436_idol347/
+obj-$(CONFIG_TOUCHSCREEN_MSG2638)	+= msg2638_tp/
+endif
+ifdef CONFIG_TCT_8X16_IDOL3
+obj-$(CONFIG_TOUCHSCREEN_FT5X36_IDOL3)		+= ft5x36_idol3/
+#ADD-BEGIN by xingchen.wang 2015/01/29 CR.874750 idol3_5.5 2nd source TP development.
+obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_IDOL3)          += s7020_idol3/
+#ADD-EDD by xingchen.wang 2015/01/29.
+endif
+#[PLATFORM]-Add-END by TCTNB.ZXZ
+# modify(add) by junfeng.zhou.sz for [TP driver development (1st source)] with PR721418 begin . 20140714 
+obj-$(CONFIG_TOUCHSCREEN_MSG21XX)		+= msg21xx/
+# modify(add) by junfeng.zhou.sz for [TP driver development (1st source)] with PR721418 end . 
+
 obj-$(CONFIG_TOUCHSCREEN_BU21150)	+= bu21150.o
 obj-$(CONFIG_INPUT_MT_WRAPPER)		+= input_mt_wrapper.o
-obj-$(CONFIG_TOUCHSCREEN_IT7260_I2C)    += it7258_ts_i2c.o
+

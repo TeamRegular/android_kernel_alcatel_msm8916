@@ -53,6 +53,14 @@
 #define WCD_MBHC_BTN_PRESS_COMPL_TIMEOUT_MS  50
 
 static int det_extn_cable_en;
+
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
+extern uint8_t headset_enable_27;
+extern uint8_t mos_test_flag_enable;
+#endif
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/02/28*/
+
 module_param(det_extn_cable_en, int,
 		S_IRUGO | S_IWUSR | S_IWGRP);
 MODULE_PARM_DESC(det_extn_cable_en, "enable/disable extn cable detect");
@@ -158,12 +166,14 @@ static void wcd_enable_curr_micbias(const struct wcd_mbhc *mbhc,
 	pr_debug("%s: enter, cs_mb_en: %d\n", __func__, cs_mb_en);
 
 	switch (cs_mb_en) {
+#ifndef MICBIAS_2700MV
 	case WCD_MBHC_EN_CS:
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MICB_CTRL, 0);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 3);
 		/* Program Button threshold registers as per CS */
 		wcd_program_btn_threshold(mbhc, false);
 		break;
+#endif
 	case WCD_MBHC_EN_MB:
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 1);
@@ -173,6 +183,7 @@ static void wcd_enable_curr_micbias(const struct wcd_mbhc *mbhc,
 		/* Program Button threshold registers as per MICBIAS */
 		wcd_program_btn_threshold(mbhc, true);
 		break;
+#ifndef MICBIAS_2700MV
 	case WCD_MBHC_EN_PULLUP:
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 3);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 1);
@@ -180,6 +191,7 @@ static void wcd_enable_curr_micbias(const struct wcd_mbhc *mbhc,
 		/* Program Button threshold registers as per MICBIAS */
 		wcd_program_btn_threshold(mbhc, true);
 		break;
+#endif
 	case WCD_MBHC_EN_NONE:
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 1);
@@ -539,6 +551,13 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 				~WCD_MBHC_JACK_BUTTON_MASK;
 		}
 
+#if defined(MICBIAS_2700MV)
+		if (mbhc->micbias_enable && mbhc->micbias_enable_cb) {
+			pr_debug("%s: Disabling micbias\n", __func__);
+			mbhc->micbias_enable = false;
+			mbhc->micbias_enable_cb(mbhc->codec, false);
+		}
+#else
 		if (mbhc->micbias_enable) {
 			if (mbhc->mbhc_cb->mbhc_micbias_control)
 				mbhc->mbhc_cb->mbhc_micbias_control(
@@ -550,6 +569,7 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 						MIC_BIAS_2, false);
 			mbhc->micbias_enable = false;
 		}
+#endif
 
 		mbhc->hph_type = WCD_MBHC_HPH_NONE;
 		mbhc->zl = mbhc->zr = 0;
@@ -572,6 +592,12 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 		    jack_type == SND_JACK_LINEOUT) &&
 		    (mbhc->hph_status && mbhc->hph_status != jack_type)) {
 
+#if defined(MICBIAS_2700MV)
+		if (mbhc->micbias_enable && mbhc->micbias_enable_cb) {
+			pr_debug("%s: Disabling micbias\n", __func__);
+			mbhc->micbias_enable_cb(mbhc->codec, false);
+		}
+#else
 			if (mbhc->micbias_enable) {
 				if (mbhc->mbhc_cb->mbhc_micbias_control)
 					mbhc->mbhc_cb->mbhc_micbias_control(
@@ -583,6 +609,7 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 							MIC_BIAS_2, false);
 				mbhc->micbias_enable = false;
 			}
+#endif
 			mbhc->hph_type = WCD_MBHC_HPH_NONE;
 			mbhc->zl = mbhc->zr = 0;
 			pr_debug("%s: Reporting removal (%x)\n",
@@ -625,7 +652,18 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 		}
 		else if (jack_type == SND_JACK_LINEOUT)
 			mbhc->current_plug = MBHC_PLUG_TYPE_HIGH_HPH;
+#if defined(MICBIAS_2700MV)
+		if (mbhc->micbias_enable && mbhc->micbias_enable_cb) {
+				pr_debug("%s: Enabling micbias\n", __func__);
+				mbhc->micbias_enable_cb(mbhc->codec, true);
+		}
 
+
+		if (mbhc->micbias_enable && mbhc->micbias_enable_cb) {
+			pr_debug("%s: Enabling micbias\n", __func__);
+			mbhc->micbias_enable_cb(mbhc->codec, true);
+		}
+#endif
 		if (mbhc->impedance_detect &&
 			mbhc->mbhc_cb->compute_impedance &&
 			(mbhc->mbhc_cfg->linein_th != 0)) {
@@ -651,9 +689,7 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 				__func__);
 			}
 		}
-
 		mbhc->hph_status |= jack_type;
-
 		pr_debug("%s: Reporting insertion %d(%x)\n", __func__,
 			 jack_type, mbhc->hph_status);
 		wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
@@ -681,6 +717,7 @@ static void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 		/*
 		 * Nothing was reported previously
 		 * report a headphone or unsupported
+		 * Enable CS for headphone to correct slow insertion of headset.
 		 */
 		wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADPHONE);
 	} else if (plug_type == MBHC_PLUG_TYPE_GND_MIC_SWAP) {
@@ -695,6 +732,9 @@ static void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 		 * If Headphone was reported previously, this will
 		 * only report the mic line
 		 */
+#if defined(MICBIAS_2700MV)
+		mbhc->micbias_enable = true;
+#endif
 		wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADSET);
 	} else if (plug_type == MBHC_PLUG_TYPE_HIGH_HPH) {
 		if (mbhc->mbhc_cfg->detect_extn_cable) {
@@ -728,7 +768,16 @@ static void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 exit:
 	pr_debug("%s: leave\n", __func__);
 }
-
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2014/11/19, headset det*/
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347) || defined(CONFIG_TCT_8X16_M823_ORANGE)
+/* To determine if cross connection occured */
+static bool wcd_check_cross_conn(struct wcd_mbhc *mbhc)
+{
+	enum wcd_mbhc_plug_type plug_type = mbhc->current_plug;
+	pr_debug("IDOL3: %s: leave, plug type: %d\n", __func__, plug_type);
+	return false;
+}
+#else
 /* To determine if cross connection occured */
 static int wcd_check_cross_conn(struct wcd_mbhc *mbhc)
 {
@@ -777,6 +826,8 @@ static int wcd_check_cross_conn(struct wcd_mbhc *mbhc)
 
 	return (plug_type == MBHC_PLUG_TYPE_GND_MIC_SWAP) ? true : false;
 }
+#endif
+/* [PLATFORM]-Add-END by TCTNB.HJ*/
 
 static bool wcd_is_special_headset(struct wcd_mbhc *mbhc)
 {
@@ -1012,6 +1063,9 @@ correct_plug_type:
 						WCD_MBHC_EN_NONE);
 			goto exit;
 		}
+
+/* pr876826, 2015.01.22 merge qualcomm patch, fix headset detect to headphone */
+#if defined(CONFIG_TCT_8X16_COMMON)
 		if (mbhc->btn_press_intr) {
 			wcd_cancel_btn_work(mbhc);
 			mbhc->btn_press_intr = false;
@@ -1022,6 +1076,9 @@ correct_plug_type:
 
 		/* allow sometime and re-check stop requested again */
 		msleep(20);
+#else
+		msleep(200);
+#endif
 		if (mbhc->hs_detect_work_stop) {
 			pr_debug("%s: stop requested: %d\n", __func__,
 					mbhc->hs_detect_work_stop);
@@ -1116,6 +1173,10 @@ correct_plug_type:
 			}
 			wrk_complete = false;
 		}
+/* pr876826, 2015.01.22 merge qualcomm patch, fix headset detect to headphone */
+#if defined(CONFIG_TCT_8X16_COMMON)
+		msleep(180);
+#endif
 	}
 	if (!wrk_complete && mbhc->btn_press_intr) {
 		pr_debug("%s: Can be slow insertion of headphone\n", __func__);
@@ -1133,6 +1194,13 @@ correct_plug_type:
 
 	if (plug_type == MBHC_PLUG_TYPE_HIGH_HPH &&
 		(!det_extn_cable_en)) {
+//[PLATFORM]-MOD-BEGIN by TCTSH. rong.fu, 2015/7/15, pr1037363, start
+#ifdef CONFIG_TCT_8X16_IDOL347
+		plug_type = MBHC_PLUG_TYPE_HEADSET;
+		goto report;
+#endif
+//[PLATFORM]-MOD-BEGIN by TCTSH. rong.fu, 2015/7/15, pr1037363, end
+
 		if (wcd_is_special_headset(mbhc)) {
 			pr_debug("%s: Special headset found %d\n",
 					__func__, plug_type);
@@ -1250,9 +1318,15 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 	 * pull up current, in which case this callback function
 	 * will not be defined.
 	 */
-
+/* [AUDIO]-ADD BEGIN by fu.yu,2015-12-17,Task-1175997,for headset detect from L */
+#ifdef CONFIG_TCT_8X16_IDOL347
+	printk("[Fu]%s: mbhc->current_plug: %d detection_type: %d\n", __func__,
+			mbhc->current_plug, detection_type);
+#else
 	pr_debug("%s: mbhc->current_plug: %d detection_type: %d\n", __func__,
 			mbhc->current_plug, detection_type);
+#endif
+/* [AUDIO]-ADD END by fu.yu,2015-12-17 */
 	wcd_cancel_hs_detect_plug(mbhc, &mbhc->correct_plug_swch);
 
 	if (mbhc->mbhc_cb->micbias_enable_status)
@@ -1284,10 +1358,18 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 		/* Enable external voltage source to micbias if present */
 		if (mbhc->mbhc_cb->enable_mb_source)
 			mbhc->mbhc_cb->enable_mb_source(codec, true);
+#if defined(MICBIAS_2700MV)
+		if (mbhc->mbhc_cb && mbhc->mbhc_cb->set_auto_zeroing)
+			mbhc->mbhc_cb->set_auto_zeroing(codec, true);
+#endif
 		mbhc->btn_press_intr = false;
 		wcd_mbhc_detect_plug_type(mbhc);
 	} else if ((mbhc->current_plug != MBHC_PLUG_TYPE_NONE)
 			&& !detection_type) {
+#if defined(MICBIAS_2700MV)
+		if (mbhc->mbhc_cb && mbhc->mbhc_cb->set_auto_zeroing)
+			mbhc->mbhc_cb->set_auto_zeroing(codec, false);
+#endif
 		/* Disable external voltage source to micbias if present */
 		if (mbhc->mbhc_cb->enable_mb_source)
 			mbhc->mbhc_cb->enable_mb_source(codec, false);
@@ -1337,6 +1419,10 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_LINEOUT);
 		}
 	} else if (!detection_type) {
+#if defined(MICBIAS_2700MV)
+		if (mbhc->mbhc_cb && mbhc->mbhc_cb->set_auto_zeroing)
+			mbhc->mbhc_cb->set_auto_zeroing(codec, false);
+#endif
 		/* Disable external voltage source to micbias if present */
 		if (mbhc->mbhc_cb->enable_mb_source)
 			mbhc->mbhc_cb->enable_mb_source(codec, false);
@@ -1379,18 +1465,27 @@ static int wcd_mbhc_get_button_mask(struct wcd_mbhc *mbhc)
 	case 0:
 		mask = SND_JACK_BTN_0;
 		break;
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/01/23 */
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)/*TCT-NB Tianhongwei add vol up key for selfie stick*/
 	case 1:
 		mask = SND_JACK_BTN_1;
 		break;
-	case 2:
-		mask = SND_JACK_BTN_2;
+#endif
+#if !defined(CONFIG_TCT_8X16_IDOL347) &&  !defined(CONFIG_TCT_8X16_IDOL3)
+	case 1:
+	    mask = SND_JACK_BTN_1;
 		break;
 	case 3:
+	    mask = SND_JACK_BTN_2;
+	    break;
+	case 7:
 		mask = SND_JACK_BTN_3;
 		break;
-	case 4:
+	case 15:
 		mask = SND_JACK_BTN_4;
 		break;
+#endif
+/* [PLATFORM]-Add-EN by TCTNB.HJ, 2015/01/23*/
 	case 5:
 		mask = SND_JACK_BTN_5;
 		break;
@@ -2070,11 +2165,19 @@ EXPORT_SYMBOL(wcd_mbhc_stop);
  *
  * NOTE: mbhc->mbhc_cfg is not YET configure so shouldn't be used
  */
+#if defined(MICBIAS_2700MV)
+int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
+		      int (*micbias_enable_cb)(struct snd_soc_codec*, bool),
+		      const struct wcd_mbhc_cb *mbhc_cb,
+		      const struct wcd_mbhc_intr *mbhc_cdc_intr_ids,
+		      bool impedance_det_en)
+ #else
 int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 		      const struct wcd_mbhc_cb *mbhc_cb,
 		      const struct wcd_mbhc_intr *mbhc_cdc_intr_ids,
 		      struct wcd_mbhc_register *wcd_mbhc_regs,
 		      bool impedance_det_en)
+#endif
 {
 	int ret = 0;
 	int hph_swh = 0;
@@ -2105,6 +2208,9 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 	mbhc->codec = codec;
 	mbhc->intr_ids = mbhc_cdc_intr_ids;
 	mbhc->impedance_detect = impedance_det_en;
+#if defined(MICBIAS_2700MV)
+	mbhc->micbias_enable_cb = micbias_enable_cb;
+#endif
 	mbhc->hphl_swh = hph_swh;
 	mbhc->gnd_swh = gnd_swh;
 	mbhc->micbias_enable = false;
@@ -2160,6 +2266,32 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 			return ret;
 		}
 
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)/*TCT-NB Tianhongwei add vol up key for selfie stick*/
+		ret = snd_jack_set_key(mbhc->button_jack.jack,
+				       SND_JACK_BTN_1,
+				       KEY_VOLUMEUP);
+#endif
+		if (ret) {
+			pr_err("%s: Failed to set code for btn-1:%d\n",
+					__func__, ret);
+			return ret;
+		}
+		ret = snd_jack_set_key(mbhc->button_jack.jack,
+				       SND_JACK_BTN_2,
+				       KEY_VOLUMEUP);
+		if (ret) {
+			pr_err("%s: Failed to set code for btn-2:%d\n",
+				__func__, ret);
+			return ret;
+		}
+		ret = snd_jack_set_key(mbhc->button_jack.jack,
+				       SND_JACK_BTN_3,
+				       KEY_VOLUMEDOWN);
+		if (ret) {
+			pr_err("%s: Failed to set code for btn-3:%d\n",
+				__func__, ret);
+			return ret;
+		}
 		set_bit(INPUT_PROP_NO_DUMMY_RELEASE,
 			mbhc->button_jack.jack->input_dev->propbit);
 

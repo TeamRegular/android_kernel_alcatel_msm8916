@@ -61,7 +61,13 @@ enum wcd_mbhc_register_function {
 	WCD_MBHC_PULLDOWN_CTRL,
 	WCD_MBHC_REG_FUNC_MAX,
 };
-
+#if 0
+/* [PLATFORM]-Add-BEGIN by TCTSH, rong.fu@jrdcom.com, 2015/05/12, BUG 997988,  merge qualcomm patch, keep micbias enabled to 2700mv */
+#if defined(CONFIG_TCT_8X16_IDOL347)
+#define MICBIAS_2700MV 1
+#endif
+/* [PLATFORM]-Add-END by TCTSH, rong.fu@jrdcom.com, 2015/05/12 */
+#endif
 enum wcd_mbhc_plug_type {
 	MBHC_PLUG_TYPE_INVALID = -1,
 	MBHC_PLUG_TYPE_NONE,
@@ -408,6 +414,10 @@ struct wcd_mbhc {
 	/* Work to correct accessory type */
 	struct work_struct correct_plug_swch;
 	struct notifier_block nblock;
+#if defined(MICBIAS_2700MV)
+	/* call back function to enable micbias*/
+	int (*micbias_enable_cb)(struct snd_soc_codec*, bool);
+#endif
 
 	struct wcd_mbhc_register *wcd_mbhc_regs;
 
@@ -472,11 +482,20 @@ int wcd_mbhc_set_keycode(struct wcd_mbhc *mbhc);
 int wcd_mbhc_start(struct wcd_mbhc *mbhc,
 		       struct wcd_mbhc_config *mbhc_cfg);
 void wcd_mbhc_stop(struct wcd_mbhc *mbhc);
+
+#if defined(MICBIAS_2700MV)
+int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
+		      int (*micbias_enable_cb)(struct snd_soc_codec*, bool),
+		      const struct wcd_mbhc_cb *mbhc_cb,
+		      const struct wcd_mbhc_intr *mbhc_cdc_intr_ids,
+		      bool impedance_det_en);
+#else
 int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 		      const struct wcd_mbhc_cb *mbhc_cb,
 		      const struct wcd_mbhc_intr *mbhc_cdc_intr_ids,
 		      struct wcd_mbhc_register *mbhc_reg,
 		      bool impedance_det_en);
+#endif
 int wcd_mbhc_get_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
 			   uint32_t *zr);
 #else

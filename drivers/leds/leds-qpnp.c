@@ -557,6 +557,9 @@ struct qpnp_led_data {
 };
 
 static DEFINE_MUTEX(flash_lock);
+/*[PLATFORM]-Add-BEGIN by WD, FR-717338 , 2014/10/31*/
+extern bool alarm_boot; //defined in /kernel/main.c
+/*[PLATFORM]-Add-END*/
 static struct pwm_device *kpdbl_master;
 static u32 kpdbl_master_period_us;
 DECLARE_BITMAP(kpdbl_leds_in_use, NUM_KPDBL_LEDS);
@@ -4110,14 +4113,15 @@ static int qpnp_leds_probe(struct spmi_device *spmi)
 		}
 
 		/* configure default state */
-		if (led->default_on) {
+		if (led->default_on && !alarm_boot) {
 			led->cdev.brightness = led->cdev.max_brightness;
 			__qpnp_led_work(led, led->cdev.brightness);
 			if (led->turn_off_delay_ms > 0)
 				qpnp_led_turn_off(led);
-		} else
+		} else{
 			led->cdev.brightness = LED_OFF;
-
+                        __qpnp_led_work(led, led->cdev.brightness); //[BUGFIX]Added by WD, bug 717338
+                }
 		parsed_leds++;
 	}
 	dev_set_drvdata(&spmi->dev, led_array);

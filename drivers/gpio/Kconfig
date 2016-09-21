@@ -730,4 +730,16 @@ config GPIO_VIPERBOARD
           River Tech's viperboard.h for detailed meaning
           of the module parameters.
 
+config GPIO_BOARD_ID_STATUS
+         tristate "BOARD ID status"
+         help
+           Say 'y' here to include debug support for the Qualcomm
+           QPNP gpio status.
+
+config GPIO_NPI_DOWN_STATUS
+         tristate "NPI Down status"
+         help
+           Say 'y' here to include debug support for the Qualcomm
+           QPNP gpio status.
+
 endif

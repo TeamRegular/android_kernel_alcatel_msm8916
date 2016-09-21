@@ -6,14 +6,8 @@ targets += dtbs
 #used for cleaning - not building
 ifndef CONFIG_TCT_8X16_COMMON
 subdir- := qcom
-endif
-
-
-ifdef CONFIG_TCT_8X16_IDOL3
+else
 subdir- := idol3
-endif
-ifdef CONFIG_TCT_8X16_IDOL347
-subdir- := idol347
 endif
 
 

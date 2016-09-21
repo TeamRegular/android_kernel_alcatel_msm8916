@@ -216,7 +216,7 @@ targets += $(DTB_LIST)
 ifndef CONFIG_TCT_8X16_COMMON
 subdir- := qcom
 else
-subdir- := $(TARGET_PRODUCT)
+subdir- := idol347
 endif
 endif
 

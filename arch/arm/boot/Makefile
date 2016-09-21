@@ -42,7 +42,7 @@ endif
 ifndef CONFIG_TCT_8X16_COMMON
 DTB_OBJS := $(addprefix $(obj)/dts/qcom/,$(DTB_LIST))
 else
-DTB_OBJS := $(addprefix $(obj)/dts/$(TARGET_PRODUCT)/,$(DTB_LIST))
+DTB_OBJS := $(addprefix $(obj)/dts/idol347/,$(DTB_LIST))
 endif
 
 ifeq ($(CONFIG_XIP_KERNEL),y)

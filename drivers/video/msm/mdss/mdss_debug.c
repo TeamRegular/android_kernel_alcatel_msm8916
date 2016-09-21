@@ -80,7 +80,7 @@ static ssize_t panel_debug_base_offset_write(struct file *file,
 
 	buf[count] = 0;	/* end of string */
 
-	if (sscanf(buf, "%x %x", &off, &cnt) != 2)
+	if (sscanf(buf, "%x %u", &off, &cnt) != 2)
 		return -EFAULT;
 
 	if (off > dbg->max_offset)
@@ -111,10 +111,10 @@ static ssize_t panel_debug_base_offset_read(struct file *file,
 		return 0;	/* the end */
 
 	len = snprintf(buf, sizeof(buf), "0x%02zx %zx\n", dbg->off, dbg->cnt);
-	if (len < 0)
+	if (len < 0 || len >= sizeof(buf))
 		return 0;
 
-	if (copy_to_user(buff, buf, len))
+	if ((count < sizeof(buf)) || copy_to_user(buff, buf, len))
 		return -EFAULT;
 
 	*ppos += len;	/* increase offset */
@@ -249,10 +249,11 @@ static ssize_t panel_debug_base_reg_read(struct file *file,
 	if (mdata->debug_inf.debug_enable_clock)
 		mdata->debug_inf.debug_enable_clock(0);
 
-	if (len < 0)
+	if (len < 0 || len >= sizeof(to_user_buf))
 		return 0;
 
-	if (copy_to_user(user_buf, to_user_buf, len))
+	if ((count < sizeof(to_user_buf))
+			|| copy_to_user(user_buf, to_user_buf, len))
 		return -EFAULT;
 
 	*ppos += len;	/* increase offset */
@@ -386,7 +387,7 @@ static ssize_t mdss_debug_base_offset_read(struct file *file,
 {
 	struct mdss_debug_base *dbg = file->private_data;
 	int len = 0;
-	char buf[24];
+	char buf[24] = {'\0'};
 
 	if (!dbg)
 		return -ENODEV;
@@ -395,10 +396,10 @@ static ssize_t mdss_debug_base_offset_read(struct file *file,
 		return 0;	/* the end */
 
 	len = snprintf(buf, sizeof(buf), "0x%08zx %zx\n", dbg->off, dbg->cnt);
-	if (len < 0)
+	if (len < 0 || len >= sizeof(buf))
 		return 0;
 
-	if (copy_to_user(buff, buf, len))
+	if ((count < sizeof(buf)) || copy_to_user(buff, buf, len))
 		return -EFAULT;
 
 	*ppos += len;	/* increase offset */
@@ -605,11 +606,11 @@ static ssize_t mdss_debug_factor_write(struct file *file,
 
 	if (strnchr(buf, count, '/')) {
 		/* Parsing buf as fraction */
-		if (sscanf(buf, "%d/%d", &numer, &denom) != 2)
+		if (sscanf(buf, "%u/%u", &numer, &denom) != 2)
 			return -EFAULT;
 	} else {
 		/* Parsing buf as percentage */
-		if (sscanf(buf, "%d", &numer) != 1)
+		if (kstrtouint(buf, 0, &numer))
 			return -EFAULT;
 		denom = 100;
 	}
@@ -629,7 +630,7 @@ static ssize_t mdss_debug_factor_read(struct file *file,
 {
 	struct mdss_fudge_factor *factor = file->private_data;
 	int len = 0;
-	char buf[32];
+	char buf[32] = {'\0'};
 
 	if (!factor)
 		return -ENODEV;
@@ -639,10 +640,10 @@ static ssize_t mdss_debug_factor_read(struct file *file,
 
 	len = snprintf(buf, sizeof(buf), "%d/%d\n",
 			factor->numer, factor->denom);
-	if (len < 0)
+	if (len < 0 || len >= sizeof(buf))
 		return 0;
 
-	if (copy_to_user(buff, buf, len))
+	if ((count < sizeof(buf)) || copy_to_user(buff, buf, len))
 		return -EFAULT;
 
 	*ppos += len;	/* increase offset */
@@ -673,6 +674,8 @@ static ssize_t mdss_debug_perf_mode_write(struct file *file,
 	if (copy_from_user(buf, user_buf, count))
 		return -EFAULT;
 
+	buf[count] = 0;	/* end of string */
+
 	if (sscanf(buf, "%d", &perf_mode) != 1)
 		return -EFAULT;
 
@@ -693,7 +696,7 @@ static ssize_t mdss_debug_perf_mode_read(struct file *file,
 {
 	struct mdss_perf_tune *perf_tune = file->private_data;
 	int len = 0;
-	char buf[40];
+	char buf[40] = {'\0'};
 
 	if (!perf_tune)
 		return -ENODEV;
@@ -701,14 +704,12 @@ static ssize_t mdss_debug_perf_mode_read(struct file *file,
 	if (*ppos)
 		return 0;	/* the end */
 
-	buf[count] = 0;
-
 	len = snprintf(buf, sizeof(buf), "min_mdp_clk %lu min_bus_vote %llu\n",
 	perf_tune->min_mdp_clk, perf_tune->min_bus_vote);
-	if (len < 0)
+	if (len < 0 || len >= sizeof(buf))
 		return 0;
 
-	if (copy_to_user(buff, buf, len))
+	if ((count < sizeof(buf)) || copy_to_user(buff, buf, len))
 		return -EFAULT;
 
 	*ppos += len;   /* increase offset */
@@ -728,7 +729,7 @@ static ssize_t mdss_debug_perf_panic_read(struct file *file,
 {
 	struct mdss_data_type *mdata = file->private_data;
 	int len = 0;
-	char buf[40];
+	char buf[40] = {'\0'};
 
 	if (!mdata)
 		return -ENODEV;
@@ -738,10 +739,10 @@ static ssize_t mdss_debug_perf_panic_read(struct file *file,
 
 	len = snprintf(buf, sizeof(buf), "%d\n",
 		!mdata->has_panic_ctrl);
-	if (len < 0)
+	if (len < 0 || len >= sizeof(buf))
 		return 0;
 
-	if (copy_to_user(buff, buf, len))
+	if ((count < sizeof(buf)) || copy_to_user(buff, buf, len))
 		return -EFAULT;
 
 	*ppos += len;   /* increase offset */
@@ -804,8 +805,13 @@ static ssize_t mdss_debug_perf_panic_write(struct file *file,
 	if (!mdata)
 		return -EFAULT;
 
+	if (count >= sizeof(buf))
+		return -EFAULT;
+
 	if (copy_from_user(buf, user_buf, count))
 		return -EFAULT;
+
+	buf[count] = 0;	/* end of string */
 
 	if (sscanf(buf, "%d", &disable_panic) != 1)
 		return -EFAULT;
@@ -850,6 +856,91 @@ static int mdss_debugfs_cleanup(struct mdss_debug_data *mdd)
 
 	return 0;
 }
+
+static ssize_t mdss_debug_perf_bw_limit_read(struct file *file,
+			char __user *buff, size_t count, loff_t *ppos)
+{
+	struct mdss_data_type *mdata = file->private_data;
+	struct mdss_max_bw_settings *temp_settings;
+	int len = 0, i;
+	char buf[256];
+
+	if (!mdata)
+		return -ENODEV;
+
+	if (*ppos)
+		return 0;	/* the end */
+
+	pr_debug("mdata->max_bw_settings_cnt = %d\n",
+			mdata->max_bw_settings_cnt);
+
+	temp_settings = mdata->max_bw_settings;
+	for (i = 0; i < mdata->max_bw_settings_cnt; i++) {
+		len += snprintf(buf + len, sizeof(buf), "%d %d\n",
+				temp_settings->mdss_max_bw_mode,
+					temp_settings->mdss_max_bw_val);
+		temp_settings++;
+	}
+
+	if (len < 0)
+		return 0;
+
+	if (copy_to_user(buff, buf, len))
+		return -EFAULT;
+
+	*ppos += len;	/* increase offset */
+
+	return len;
+}
+
+static ssize_t mdss_debug_perf_bw_limit_write(struct file *file,
+		    const char __user *user_buf, size_t count, loff_t *ppos)
+{
+	struct mdss_data_type *mdata = file->private_data;
+	char buf[32];
+	u32 mode, val, cnt;
+	struct mdss_max_bw_settings *temp_settings;
+
+	if (!mdata)
+		return -ENODEV;
+
+
+	if (count >= sizeof(buf))
+		return -EFAULT;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	buf[count] = 0;	/* end of string */
+	cnt = mdata->max_bw_settings_cnt;
+	temp_settings = mdata->max_bw_settings;
+
+	if (strnchr(buf, count, ' ')) {
+		/* Parsing buf */
+		if (sscanf(buf, "%u %u", &mode, &val) != 2)
+			return -EFAULT;
+	}
+
+	while (cnt--) {
+		if (mode == temp_settings->mdss_max_bw_mode) {
+			temp_settings->mdss_max_bw_val = val;
+			break;
+		} else {
+			temp_settings++;
+		}
+	}
+
+	if (cnt == 0)
+		pr_err("Input mode is invalid\n");
+
+	return count;
+}
+
+static const struct file_operations mdss_perf_bw_limit_fops = {
+	.open = simple_open,
+	.read = mdss_debug_perf_bw_limit_read,
+	.write = mdss_debug_perf_bw_limit_write,
+};
 
 static int mdss_debugfs_perf_init(struct mdss_debug_data *mdd,
 			struct mdss_data_type *mdata) {
@@ -903,6 +994,9 @@ static int mdss_debugfs_perf_init(struct mdss_debug_data *mdd,
 	mdata->latency_buff_per = 0;
 	debugfs_create_u32("latency_buff_per", 0644, mdd->perf,
 		(u32 *)&mdata->latency_buff_per);
+
+	debugfs_create_file("threshold_bw_limit", 0644, mdd->perf,
+		(struct mdss_data_type *)mdata, &mdss_perf_bw_limit_fops);
 
 	return 0;
 }
@@ -1052,7 +1146,7 @@ static inline struct mdss_mdp_misr_map *mdss_misr_get_map(u32 block_id,
 	char *ctrl_reg = NULL, *value_reg = NULL;
 	char *intf_base = NULL;
 
-	if (block_id > DISPLAY_MISR_MDP) {
+	if (block_id > DISPLAY_MISR_HDMI && block_id != DISPLAY_MISR_MDP) {
 		pr_err("MISR Block id (%d) out of range\n", block_id);
 		return NULL;
 	}
@@ -1139,6 +1233,12 @@ int mdss_misr_set(struct mdss_data_type *mdata,
 	u32 mixer_num = 0;
 	bool is_valid_wb_mixer = true;
 	bool use_mdp_up_misr = false;
+
+	if (!mdata || !req || !ctl) {
+		pr_err("Invalid input params: mdata = %p req = %p ctl = %p",
+			mdata, req, ctl);
+		return -EINVAL;
+	}
 
 	map = mdss_misr_get_map(req->block_id, ctl, mdata);
 

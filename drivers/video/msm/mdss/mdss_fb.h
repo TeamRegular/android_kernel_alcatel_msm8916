@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -239,20 +239,14 @@ struct msm_fb_data_type {
 	int ext_ad_ctrl;
 	u32 ext_bl_ctrl;
 	u32 calib_mode;
-	#ifdef CONFIG_TCT_8X16_IDOL347
 	u32 calib_mode_bl;
-	#endif
 	u32 ad_bl_level;
 	u32 bl_level;
 	u32 bl_scale;
 	u32 bl_min_lvl;
 	u32 unset_bl_level;
 	u32 bl_updated;
-	#ifdef CONFIG_TCT_8X16_IDOL347
 	u32 bl_level_scaled;
-	#else
-	u32 bl_level_old;
-	#endif
 	struct mutex bl_lock;
 
 	struct platform_device *pdev;

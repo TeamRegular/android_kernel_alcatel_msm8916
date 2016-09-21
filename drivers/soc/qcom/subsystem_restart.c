@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -48,6 +48,10 @@ module_param(disable_restart_work, uint, S_IRUGO | S_IWUSR);
 
 static int enable_debug;
 module_param(enable_debug, int, S_IRUGO | S_IWUSR);
+
+/* The maximum shutdown timeout is the product of MAX_LOOPS and DELAY_MS. */
+#define SHUTDOWN_ACK_MAX_LOOPS	50
+#define SHUTDOWN_ACK_DELAY_MS	100
 
 #ifdef CONFIG_MSM_DLOAD_MODE
 char panic_subsystem[16];
@@ -514,6 +518,25 @@ static void disable_all_irqs(struct subsys_device *dev)
 		disable_irq(dev->desc->stop_ack_irq);
 }
 
+int wait_for_shutdown_ack(struct subsys_desc *desc)
+{
+	int count;
+
+	if (desc && !desc->shutdown_ack_gpio)
+		return 0;
+
+	for (count = SHUTDOWN_ACK_MAX_LOOPS; count > 0; count--) {
+		if (gpio_get_value(desc->shutdown_ack_gpio))
+			return count;
+		msleep(SHUTDOWN_ACK_DELAY_MS);
+	}
+
+	pr_err("[%s]: Timed out waiting for shutdown ack\n", desc->name);
+
+	return -ETIMEDOUT;
+}
+EXPORT_SYMBOL(wait_for_shutdown_ack);
+
 static int wait_for_err_ready(struct subsys_device *subsys)
 {
 	int ret;
@@ -794,8 +817,26 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 		track = &dev->track;
 	}
 
+	/*
+	 * If a system reboot/shutdown is under way, ignore subsystem errors.
+	 * However, print a message so that we know that a subsystem behaved
+	 * unexpectedly here.
+	 */
+	if (system_state == SYSTEM_RESTART
+		|| system_state == SYSTEM_POWER_OFF) {
+		WARN(1, "SSR aborted: %s, system reboot/shutdown is under way\n",
+			desc->name);
+		return;
+	}
+
 	mutex_lock(&track->lock);
 	do_epoch_check(dev);
+
+	if (dev->track.state == SUBSYS_OFFLINE) {
+		mutex_unlock(&track->lock);
+		WARN(1, "SSR aborted: %s subsystem not online\n", desc->name);
+		return;
+	}
 
 	/*
 	 * It's necessary to take the registration lock because the subsystem
@@ -1379,6 +1420,11 @@ static int subsys_parse_devicetree(struct subsys_desc *desc)
 
 	ret = __get_gpio(desc, "qcom,gpio-ramdump-disable",
 			&desc->ramdump_disable_gpio);
+	if (ret && ret != -ENOENT)
+		return ret;
+
+	ret = __get_gpio(desc, "qcom,gpio-shutdown-ack",
+			&desc->shutdown_ack_gpio);
 	if (ret && ret != -ENOENT)
 		return ret;
 

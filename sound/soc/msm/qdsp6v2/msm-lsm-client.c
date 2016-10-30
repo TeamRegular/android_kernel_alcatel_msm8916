@@ -753,10 +753,9 @@ static int msm_lsm_ioctl_shared(struct snd_pcm_substream *substream,
 			dev_err(rtd->dev,
 				"%s: lsm open failed, %d\n",
 				__func__, ret);
-			q6lsm_client_free(prtd->lsm_client);
-			kfree(prtd);
 			return ret;
 		}
+		prtd->lsm_client->opened = true;
 		dev_dbg(rtd->dev, "%s: Session_ID = %d, APP ID = %d\n",
 			__func__,
 			prtd->lsm_client->session,
@@ -1112,6 +1111,7 @@ struct snd_lsm_detection_params_32 {
 	enum lsm_detection_mode detect_mode;
 	u8 num_confidence_levels;
 	bool detect_failure;
+	bool poll_enable;
 };
 
 struct lsm_params_info_32 {
@@ -1293,6 +1293,7 @@ static int msm_lsm_ioctl_compat(struct snd_pcm_substream *substream,
 				det_params32.num_confidence_levels;
 			det_params.detect_failure =
 				det_params32.detect_failure;
+			det_params.poll_enable = det_params32.poll_enable;
 			cmd = SNDRV_LSM_SET_PARAMS;
 			err = msm_lsm_ioctl_shared(substream, cmd,
 					&det_params);
@@ -1728,7 +1729,7 @@ static int msm_lsm_open(struct snd_pcm_substream *substream)
 	prtd->lsm_client->session_state = IDLE;
 	prtd->lsm_client->poll_enable = true;
 	prtd->lsm_client->perf_mode = 0;
-
+	prtd->lsm_client->opened = false;
 	return 0;
 }
 
@@ -1818,7 +1819,10 @@ static int msm_lsm_close(struct snd_pcm_substream *substream)
 	msm_pcm_routing_dereg_phy_stream(rtd->dai_link->be_id,
 					SNDRV_PCM_STREAM_CAPTURE);
 
-	q6lsm_close(prtd->lsm_client);
+	if (prtd->lsm_client->opened) {
+		q6lsm_close(prtd->lsm_client);
+		prtd->lsm_client->opened = false;
+	}
 	q6lsm_client_free(prtd->lsm_client);
 
 	spin_lock_irqsave(&prtd->event_lock, flags);
@@ -1826,6 +1830,7 @@ static int msm_lsm_close(struct snd_pcm_substream *substream)
 	prtd->event_status = NULL;
 	spin_unlock_irqrestore(&prtd->event_lock, flags);
 	kfree(prtd);
+	runtime->private_data = NULL;
 
 	return 0;
 }

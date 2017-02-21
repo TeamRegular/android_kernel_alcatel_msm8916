@@ -86,14 +86,9 @@ static int pri_rx_sample_rate = SAMPLING_RATE_48KHZ;
 static int mi2s_tx_sample_rate = SAMPLING_RATE_48KHZ;
 
 static int msm_proxy_rx_ch = 2;
-/*NB.THW 2014/11/17 add for FR.789207*/
-#ifdef CONFIG_SND_QUAT_MI2S
-atomic_t quat_mi2s_clk_ref;
-#endif
-/*THW 2014/11/17 end*/
 static int msm8909_auxpcm_rate = 8000;
 
-
+static atomic_t quat_mi2s_clk_ref;
 static atomic_t auxpcm_mi2s_clk_ref;
 
 static int msm8x16_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
@@ -102,8 +97,11 @@ static int msm8x16_enable_extcodec_ext_clk(struct snd_soc_codec *codec,
 					int enable,	bool dapm);
 
 static int conf_int_codec_mux(struct msm8916_asoc_mach_data *pdata);
-
+/*NB.THW 2014/11/17 add for FR.789207*/
+#ifdef CONFIG_SND_QUAT_MI2S
 static int conf_int_codec_mux_quat(struct msm8916_asoc_mach_data *pdata);
+#endif
+/*NB.THW 2014/11/17 end*/
 
 static void *def_tasha_mbhc_cal(void);
 /*
@@ -118,6 +116,15 @@ static struct wcd_mbhc_config mbhc_cfg = {
 	.mono_stero_detection = false,
 	.swap_gnd_mic = NULL,
 	.hs_ext_micbias = false,
+	.key_code[0] = KEY_MEDIA,
+	.key_code[1] = KEY_VOICECOMMAND,
+	.key_code[2] = KEY_VOLUMEUP,
+	.key_code[3] = KEY_VOLUMEDOWN,
+	.key_code[4] = 0,
+	.key_code[5] = 0,
+	.key_code[6] = 0,
+	.key_code[7] = 0,
+	.linein_th = 5000,
 };
 
 static struct wcd_mbhc_config wcd_mbhc_cfg = {
@@ -969,14 +976,14 @@ int quat_mi2s_sclk_enable(int enable)
 		}
 
 		if (mi2s_rx_bit_format == SNDRV_PCM_FORMAT_S24_LE)
-			mi2s_rx_clk.clk_val1 =
+			mi2s_rx_clk_v1.clk_val1 =
 				Q6AFE_LPASS_IBIT_CLK_3_P072_MHZ;
 		else
-			mi2s_rx_clk.clk_val1 =
+			mi2s_rx_clk_v1.clk_val1 =
 				Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ;
 
 		ret = afe_set_lpass_clock(AFE_PORT_ID_QUATERNARY_MI2S_RX,
-                                                 &mi2s_rx_clk);
+                                                 &mi2s_rx_clk_v1);
 		if (ret < 0)
 			pr_err("[Liu]%s:afe_set_lpass_clock failed\n", __func__);
 
@@ -989,10 +996,10 @@ int quat_mi2s_sclk_enable(int enable)
 	}
 	else {
 		msm_q6_enable_mi2s_clocks(0);
-		mi2s_rx_clk.clk_val1 = Q6AFE_LPASS_IBIT_CLK_DISABLE;
-		mi2s_rx_clk.clk_val2 = Q6AFE_LPASS_OSR_CLK_DISABLE;
+		mi2s_rx_clk_v1.clk_val1 = Q6AFE_LPASS_IBIT_CLK_DISABLE;
+		mi2s_rx_clk_v1.clk_val2 = Q6AFE_LPASS_OSR_CLK_DISABLE;
 		ret = afe_set_lpass_clock(AFE_PORT_ID_QUATERNARY_MI2S_RX,
-			&mi2s_rx_clk);
+			&mi2s_rx_clk_v1);
 		if (ret < 0)
 			pr_err("[Liu]%s:afe_set_lpass_clock failed\n", __func__);
 		ret = pinctrl_select_state(pinctrl_info.pinctrl,
@@ -1030,11 +1037,11 @@ static int quat_mi2s_sclk_put(struct snd_kcontrol *kcontrol,
 
       printk(KERN_ERR"%s: %d\n", __func__, mi2s_rx_bit_format);
       if (mi2s_rx_bit_format == SNDRV_PCM_FORMAT_S24_LE)
-			mi2s_rx_clk.clk_val1 = Q6AFE_LPASS_IBIT_CLK_3_P072_MHZ;
+			mi2s_rx_clk_v1.clk_val1 = Q6AFE_LPASS_IBIT_CLK_3_P072_MHZ;
 		else
-			mi2s_rx_clk.clk_val1 = Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ;
+			mi2s_rx_clk_v1.clk_val1 = Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ;
 		ret = afe_set_lpass_clock(AFE_PORT_ID_QUATERNARY_MI2S_RX,
-					  &mi2s_rx_clk);
+					  &mi2s_rx_clk_v1);
         if (ret < 0)
 			printk(KERN_ERR"%s:afe_set_lpass_clock failed\n", __func__);
 
@@ -1044,10 +1051,10 @@ static int quat_mi2s_sclk_put(struct snd_kcontrol *kcontrol,
 		break;
 	case 0:
 		msm_q6_enable_mi2s_clocks(0); /*qingshen added*/
-		mi2s_rx_clk.clk_val1 = Q6AFE_LPASS_IBIT_CLK_DISABLE;
-		mi2s_rx_clk.clk_val2 = Q6AFE_LPASS_OSR_CLK_DISABLE; /*qingshen added*/ 
+		mi2s_rx_clk_v1.clk_val1 = Q6AFE_LPASS_IBIT_CLK_DISABLE;
+		mi2s_rx_clk_v1.clk_val2 = Q6AFE_LPASS_OSR_CLK_DISABLE; /*qingshen added*/ 
 		ret = afe_set_lpass_clock(AFE_PORT_ID_QUATERNARY_MI2S_RX,
-					  &mi2s_rx_clk);
+					  &mi2s_rx_clk_v1);
         if (ret < 0)
 			pr_err("%s:afe_set_lpass_clock failed\n", __func__);
 
@@ -1066,7 +1073,6 @@ static int quat_mi2s_sclk_put(struct snd_kcontrol *kcontrol,
 	return ret;
 }
 #endif
-/*NB.THW 2014/11/17 end*/
 
 static uint32_t get_mi2s_rx_clk_val(void)
 {
@@ -1526,11 +1532,6 @@ static int msm_sec_mi2s_snd_startup(struct snd_pcm_substream *substream)
 	pr_debug("%s(): substream = %s  stream = %d\n", __func__,
 				substream->name, substream->stream);
 
-/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2014/11/28*/
-#ifdef CONFIG_TCT_8X16_IDOL3
-	pr_debug("hujin in [%s]\n", __func__);
-#endif
-/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2014/11/28*/
 	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 		pr_info("%s: Secondary Mi2s does not support capture\n",
 					__func__);
@@ -1611,39 +1612,23 @@ static void msm_sec_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 	}
 }
 
-/*NB.THW 2014/11/17 add for FR.789207*/
-#ifdef CONFIG_SND_QUAT_MI2S
 static int conf_int_codec_mux_quat(struct msm8916_asoc_mach_data *pdata)
 {
-	int ret = 0;
 	int val = 0;
 	void __iomem *vaddr = NULL;
 
-	vaddr = ioremap(LPASS_CSR_GP_IO_MUX_SPKR_CTL , 4);
-	if (!vaddr) {
-		pr_err("%s ioremap failure for addr %x",
-			__func__, LPASS_CSR_GP_IO_MUX_SPKR_CTL);
-		return -ENOMEM;
-	}
-	/* enable sec MI2S interface to TLMM GPIO */
+	vaddr = pdata->vaddr_gpio_mux_spkr_ctl;
 	val = ioread32(vaddr);
 	val = val | 0x00000002;
-	pr_debug("%s: QUAT mux configuration = %x\n", __func__, val);
+	pr_debug("%s: QUAT mux spk configuration = %x\n", __func__, val);
 	iowrite32(val, vaddr);
-	iounmap(vaddr);
-	vaddr = ioremap(LPASS_CSR_GP_IO_MUX_MIC_CTL , 4);
-	if (!vaddr) {
-		pr_err("%s ioremap failure for addr %x",
-				__func__, LPASS_CSR_GP_IO_MUX_MIC_CTL);
-		return -ENOMEM;
-	}
-	/* enable QUAT MI2S interface to TLMM GPIO */
+	vaddr = pdata->vaddr_gpio_mux_mic_ctl;
 	val = ioread32(vaddr);
-	val = val | 0x00020002;
-	pr_debug("%s: QUAT mux configuration = %x\n", __func__, val);
+	/* enable QUAT MI2S interface to TLMM GPIO */
+	val = val | 0x02020002;
+	pr_debug("%s: QUAT mux mic configuration = %x\n", __func__, val);
 	iowrite32(val, vaddr);
-	iounmap(vaddr);
-	return ret;
+	return 0;
 }
 
 static int msm_quat_mi2s_snd_startup(struct snd_pcm_substream *substream)
@@ -1770,9 +1755,8 @@ static void msm_quat_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 		if (atomic_read(&quat_mi2s_clk_ref) > 0)
 			atomic_dec(&quat_mi2s_clk_ref);
 	}
- }
-#endif
-/*THW 2014/11/17 end*/
+}
+
 static int conf_int_codec_mux(struct msm8916_asoc_mach_data *pdata)
 {
 	int ret = 0;
@@ -1786,14 +1770,7 @@ static int conf_int_codec_mux(struct msm8916_asoc_mach_data *pdata)
 	 */
 	vaddr = pdata->vaddr_gpio_mux_spkr_ctl;
 	val = ioread32(vaddr);
-
-/*NB.THW 2014/11/17 add for FR.789207*/
-#ifdef CONFIG_SND_QUAT_MI2S
-	val = val | 0x00010002;
-#else
 	val = val | 0x00030300;
-#endif
-/*THW 2014/11/17 end*/
 	iowrite32(val, vaddr);
 
 	vaddr = pdata->vaddr_gpio_mux_mic_ctl;
@@ -1893,8 +1870,10 @@ static void *def_msm8x16_wcd_mbhc_cal(void)
 
 #define S(X, Y) ((WCD_MBHC_CAL_PLUG_TYPE_PTR(msm8x16_wcd_cal)->X) = (Y))
 /* [PLATFORM]-Mod-BEGIN by TCTNB.HJ, 2015/02/04, BUG 915764, JBL headset detect */
-#if defined(CONFIG_TCT_8X16_IDOL3) || defined (CONFIG_TCT_8X16_M823_ORANGE)
+#if defined(CONFIG_TCT_8X16_IDOL3)
 	S(v_hs_max, 1600);
+#elif defined(CONFIG_TCT_8X16_IDOL347)
+	S(v_hs_max, 1700);
 #else
 	S(v_hs_max, 1500);
 #endif
@@ -1922,7 +1901,7 @@ static void *def_msm8x16_wcd_mbhc_cal(void)
 	 * 360-680 == Button 3
 	 */
 /*NB.THW modify for PR.797086  2014/12/11*/
-#ifdef CONFIG_TCT_8X16_IDOL3
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
 	btn_low[0] = 112;/*TCT-NB modify for PR.990204 	 112*/
 	btn_high[0] = 112;/*TCT-NB modify for PR.990204 	 112*/
 	btn_low[1] = 280;/*TCT-NB Tianhongwei add vol up key for selfie stick*/
@@ -1934,31 +1913,19 @@ static void *def_msm8x16_wcd_mbhc_cal(void)
 	btn_low[4] = 784;
 	btn_high[4] = 784;
 #else
-#ifdef CONFIG_TCT_8X16_M823_ORANGE
-	btn_low[0] = 80;
-	btn_high[0] = 80;
-	btn_low[1] = 220;
-	btn_high[1] = 220;
-	btn_low[2] = 553.5;
-	btn_high[2] = 553.5;
-	btn_low[3] = 784;
-	btn_high[3] = 784;
-	btn_low[4] = 784;
-	btn_high[4] = 784;
-#else
-	btn_low[0] = 25;
-	btn_high[0] = 25;
-	btn_low[1] = 50;
-	btn_high[1] = 50;
-	btn_low[2] = 75;
-	btn_high[2] = 75;
-	btn_low[3] = 112;
-	btn_high[3] = 112;
-	btn_low[4] = 137;
-	btn_high[4] = 137;
-#endif
+	btn_low[0] = 75;
+	btn_high[0] = 75;
+	btn_low[1] = 150;
+	btn_high[1] = 150;
+	btn_low[2] = 237;
+	btn_high[2] = 237;
+	btn_low[3] = 450;
+	btn_high[3] = 450;
+	btn_low[4] = 500;
+	btn_high[4] = 500;
 #endif
 /*NB.THW END  2014/11/20*/
+
 	return msm8x16_wcd_cal;
 }
 
@@ -2009,9 +1976,8 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	return msm8x16_wcd_hs_detect(codec, &mbhc_cfg);
 }
 
-
 /* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2015/03/12*/
-#if defined(CONFIG_TCT_8X16_IDOL3)
+#ifdef CONFIG_TCT_8X16_IDOL3
 static int msm_audrx_init_ak4375(struct snd_soc_pcm_runtime *rtd)
 
 {
@@ -2097,15 +2063,11 @@ static int msm_audrx_init_wcd(struct snd_soc_pcm_runtime *rtd)
 	return ret;
 }
 
-/*NB.THW 2014/11/17 add for FR.789207*/
-#ifdef CONFIG_SND_QUAT_MI2S
 static struct snd_soc_ops msm8x16_quat_mi2s_be_ops = {
 	.startup = msm_quat_mi2s_snd_startup,
 	.hw_params = msm_mi2s_snd_hw_params,
 	.shutdown = msm_quat_mi2s_snd_shutdown,
 };
-#endif
-/*THW 2014/11/17 end*/
 
 static struct snd_soc_ops msm8x16_sec_mi2s_be_ops = {
 	.startup = msm_sec_mi2s_snd_startup,
@@ -2697,6 +2659,36 @@ static struct snd_soc_dai_link msm8x16_dai[] = {
 		.codec_name = "snd-soc-dummy",
 		.be_id = MSM_FRONTEND_DAI_QCHAT,
 	},
+	{/* hw:x,27 */
+		.name = "VoiceMMode1",
+		.stream_name = "VoiceMMode1",
+		.cpu_dai_name   = "VoiceMMode1",
+		.platform_name  = "msm-pcm-voice",
+		.dynamic = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.be_id = MSM_FRONTEND_DAI_VOICEMMODE1,
+	},
+	{/* hw:x,28 */
+		.name = "VoiceMMode2",
+		.stream_name = "VoiceMMode2",
+		.cpu_dai_name   = "VoiceMMode2",
+		.platform_name  = "msm-pcm-voice",
+		.dynamic = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.be_id = MSM_FRONTEND_DAI_VOICEMMODE2,
+	},
 	/* Backend I2S DAI Links */
 	{
 		.name = LPASS_BE_PRI_MI2S_RX,
@@ -2713,20 +2705,27 @@ static struct snd_soc_dai_link msm8x16_dai[] = {
 		.ignore_suspend = 1,
 	},
 /* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2014/11/18, HIFI*/
-#ifdef CONFIG_TCT_8X16_IDOL3
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
 	{
 		.name = LPASS_BE_SEC_MI2S_RX,
 		.stream_name = "Secondary MI2S Playback",
 		.cpu_dai_name = "msm-dai-q6-mi2s.1",
 		.platform_name = "msm-pcm-routing",
+/* [PLATFORM]-Add-BEGIN by TCTNB.HJ, 2014/11/18, HIFI*/
+#ifdef CONFIG_TCT_8X16_IDOL347
+		.codec_name = "akm-akm4375",
+#else
 		.codec_name = "ak4375",
+#endif
 		.codec_dai_name = "ak4375-AIF1",
 		.no_pcm = 1,
 		.be_id = MSM_BACKEND_DAI_SECONDARY_MI2S_RX,
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ops = &msm8x16_sec_mi2s_be_ops,
 		.ignore_suspend = 1,
+#ifndef CONFIG_TCT_8X16_IDOL347
 		.init = &msm_audrx_init_ak4375,
+#endif
 	},
 #else
 	{
@@ -2759,13 +2758,12 @@ static struct snd_soc_dai_link msm8x16_dai[] = {
 		.ignore_suspend = 1,
 	},
 /*NB.THW 2014/11/17 add for FR.789207*/
-#ifdef CONFIG_SND_QUAT_MI2S
-	 {
+	{
 		.name = LPASS_BE_QUAT_MI2S_RX,
 		.stream_name = "Quaternary MI2S Playback",
 		.cpu_dai_name = "msm-dai-q6-mi2s.3",
 		.platform_name = "msm-pcm-routing",
-#if defined( CONFIG_TCT_8X16_IDOL3) || defined (CONFIG_NXP_TFA9897_M823)/*TCT-NB tianhongwie add for m823 orange*/
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
 		.codec_dai_name = "tfa98xx-rx",
 		.codec_name = "tfa9897-codec",
 #else
@@ -2791,38 +2789,6 @@ static struct snd_soc_dai_link msm8x16_dai[] = {
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ops = &msm8x16_quat_mi2s_be_ops,
 		.ignore_suspend = 1,
-	},
-	#endif
-/*THW 2014/11/17 end*/
-	{/* hw:x,27 */
-		.name = "VoiceMMode1",
-		.stream_name = "VoiceMMode1",
-		.cpu_dai_name   = "VoiceMMode1",
-		.platform_name  = "msm-pcm-voice",
-		.dynamic = 1,
-		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
-			SND_SOC_DPCM_TRIGGER_POST},
-		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-		.codec_dai_name = "snd-soc-dummy-dai",
-		.codec_name = "snd-soc-dummy",
-		.be_id = MSM_FRONTEND_DAI_VOICEMMODE1,
-	},
-	{/* hw:x,28 */
-		.name = "VoiceMMode2",
-		.stream_name = "VoiceMMode2",
-		.cpu_dai_name   = "VoiceMMode2",
-		.platform_name  = "msm-pcm-voice",
-		.dynamic = 1,
-		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
-			SND_SOC_DPCM_TRIGGER_POST},
-		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-		.codec_dai_name = "snd-soc-dummy-dai",
-		.codec_name = "snd-soc-dummy",
-		.be_id = MSM_FRONTEND_DAI_VOICEMMODE2,
 	},
 	/* Primary AUX PCM Backend DAI Links */
 	{
@@ -2982,22 +2948,22 @@ static struct snd_soc_dai_link msm8x16_dai[] = {
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ignore_suspend = 1,
 	},
-#if defined(CONFIG_TCT_8X16_IDOL3)
-    {
-       .name = "Secondary MI2S_RX Hostless",
-       .stream_name = "Secondary MI2S_RX Hostless",
-       .cpu_dai_name = "SEC_MI2S_RX_HOSTLESS",
-       .platform_name = "msm-pcm-hostless",
-       .dynamic = 1,
-       .trigger = {SND_SOC_DPCM_TRIGGER_POST,
-                  SND_SOC_DPCM_TRIGGER_POST},
-       .no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
-       .ignore_suspend = 1,
-       .ignore_pmdown_time = 1,
-        /* This dainlink has MI2S support */
-       .codec_dai_name = "snd-soc-dummy-dai",
-       .codec_name = "snd-soc-dummy",
-    },
+#if defined(CONFIG_TCT_8X16_IDOL3) || defined(CONFIG_TCT_8X16_IDOL347)
+	{
+		.name = "Secondary MI2S_RX Hostless",
+		.stream_name = "Secondary MI2S_RX Hostless",
+		.cpu_dai_name = "SEC_MI2S_RX_HOSTLESS",
+		.platform_name = "msm-pcm-hostless",
+		.dynamic = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			    SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		 /* This dainlink has MI2S support */
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+	},
 #endif
 };
 
@@ -3229,7 +3195,6 @@ int get_cdc_gpio_lines(struct pinctrl *pinctrl, int ext_pa)
 		}
 		break;
 /* [AUDIO]-ADD END by fu.yu,2015-12-21 */
-
 	default:
 		pinctrl_info.cdc_lines_sus = pinctrl_lookup_state(pinctrl,
 			"cdc_lines_sus");
@@ -3703,11 +3668,9 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 	mutex_init(&pdata->cdc_mclk_mutex);
 	atomic_set(&pdata->mclk_rsc_ref, 0);
 	atomic_set(&pdata->mclk_enabled, false);
-/*NB.THW 2014/11/17 add for FR.789207*/
-#ifdef CONFIG_SND_QUAT_MI2S
 	atomic_set(&quat_mi2s_clk_ref, 0);
-#endif
-/*THW 2014/11/17 end*/
+	atomic_set(&auxpcm_mi2s_clk_ref, 0);
+
 	ret = snd_soc_of_parse_audio_routing(card,
 			"qcom,audio-routing");
 	if (ret)

@@ -83,7 +83,7 @@ snd-soc-msm8x16-objs := msm8x16.o msm-audio-pinctrl.o
 obj-$(CONFIG_SND_SOC_MSM8X16) += snd-soc-msm8x16.o tfa9897.o
 else
 ifdef CONFIG_TCT_8X16_IDOL347
-snd-soc-msm8x16-objs := msm8x16_idol347.o msm8939-slimbus.o msm-audio-pinctrl.o
+snd-soc-msm8x16-objs := msm8x16.o msm8939-slimbus.o msm-audio-pinctrl.o
 obj-$(CONFIG_SND_SOC_MSM8X16) += snd-soc-msm8x16.o
 else
 snd-soc-msm8x16-objs := msm8x16.o msm8939-slimbus.o

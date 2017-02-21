@@ -53,6 +53,7 @@ obj-$(CONFIG_CHARGER_BQ2415X)	+= bq2415x_charger.o
 obj-$(CONFIG_POWER_AVS)		+= avs/
 obj-$(CONFIG_SMB349_USB_CHARGER)   += smb349-charger.o
 obj-$(CONFIG_SMB350_CHARGER)   += smb350_charger.o
+obj-$(CONFIG_SMB1351_USB_CHARGER) += smb1351-charger.o
 obj-$(CONFIG_SMB135X_CHARGER)   += smb135x-charger.o
 #JRD BSP START by eric.gong@tcl.com "[idol3-4.7][charger] porting smb1360."
 ifdef CONFIG_TCT_8X16_IDOL347
